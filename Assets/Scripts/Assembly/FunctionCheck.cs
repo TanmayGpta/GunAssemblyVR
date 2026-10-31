@@ -6,7 +6,7 @@ namespace VRArmory
     // Step 05: FM 3-23.35 function check on the assembled pistol. Simulates the Beretta 92 FS lockwork
     // (safety/decocker, DA/SA hammer, trigger disconnect + reset, slide cocking the hammer) and animates the
     // Ambi_Safety_Lever, Hammer, Trigger_Shoe and slide. Desktop input: V safety, hold T trigger, hold G rack slide.
-    // For Quest the same Set* methods are driven by the trigger/lever/slide interactables.
+    // In VR, VRFunctionCheckControls turns this desktop input off and drives the same Set* methods instead.
     public class FunctionCheck : MonoBehaviour
     {
         public AssemblyPart frame;
@@ -18,21 +18,35 @@ namespace VRArmory
         public float triggerPullTime = 0.35f;
         public float slideRackTime = 0.18f;
 
+        [Header("Input")]
+        [Tooltip("Read the V / T / G keys. Turned off by the VR controls, which call the Set* methods directly.")]
+        public bool desktopInput = true;
+        // Control names shown in the HUD directives.
+        public string safetyControl = "[V]";
+        public string triggerControl = "[HOLD T]";
+        public string rackControl = "[HOLD G, THEN RELEASE]";
+
         public event Action Completed;
+        public event Action HammerFell;
         public bool IsRunning { get; private set; }
         public bool Passed { get; private set; }
+        public bool SafetyOn => safetyOn;
+        public float TriggerPull => triggerPull;
+        public float SlideAmount => slideAmount;
+        public Vector3 SlideRearDirection => frame != null ? frame.transform.TransformDirection(-muzzleLocal) : Vector3.back;
 
         private enum Check { SafeOn, SafeTrigger, SafeOff, DoubleAction, RackHeld, Reset, SingleAction, Done }
 
+        // {0} = safety control, {1} = trigger control, {2} = rack control.
         private static readonly string[] Directives =
         {
-            "FUNCTION CHECK 1/7 : PLACE SAFETY ON  [V]",
-            "FUNCTION CHECK 2/7 : SAFE - SQUEEZE TRIGGER FULLY  [HOLD T]  (HAMMER MUST NOT FALL)",
-            "FUNCTION CHECK 3/7 : RELEASE TRIGGER, PLACE SAFETY OFF / FIRE  [V]",
-            "FUNCTION CHECK 4/7 : DOUBLE ACTION - SQUEEZE TRIGGER FULLY  [HOLD T]",
-            "FUNCTION CHECK 5/7 : KEEP TRIGGER HELD - RACK THE SLIDE  [HOLD G, THEN RELEASE]",
+            "FUNCTION CHECK 1/7 : PLACE SAFETY ON  {0}",
+            "FUNCTION CHECK 2/7 : SAFE - SQUEEZE TRIGGER FULLY  {1}  (HAMMER MUST NOT FALL)",
+            "FUNCTION CHECK 3/7 : RELEASE TRIGGER, PLACE SAFETY OFF / FIRE  {0}",
+            "FUNCTION CHECK 4/7 : DOUBLE ACTION - SQUEEZE TRIGGER FULLY  {1}",
+            "FUNCTION CHECK 5/7 : KEEP TRIGGER HELD - RACK THE SLIDE  {2}",
             "FUNCTION CHECK 6/7 : SLOWLY RELEASE TRIGGER - FEEL FOR THE RESET",
-            "FUNCTION CHECK 7/7 : SINGLE ACTION - SQUEEZE TRIGGER  [HOLD T]",
+            "FUNCTION CHECK 7/7 : SINGLE ACTION - SQUEEZE TRIGGER  {1}",
             "FUNCTION CHECK PASSED - WEAPON FUNCTIONAL",
         };
 
@@ -54,6 +68,8 @@ namespace VRArmory
         private Piece hammer, trigger, lever;
         private Transform slideT;
         private Vector3 slideRestLocal, slideBackLocal;
+        private Vector3 muzzleLocal = Vector3.forward;
+        private bool rigBuilt;
         private AudioSource audioSource;
         private AudioClip fallClip, resetClip, leverClip;
 
@@ -76,13 +92,14 @@ namespace VRArmory
 
         public void Begin(AssemblyHUD targetHud)
         {
+            if (IsRunning) return; // already running: rebuilding the rig now would record animated poses as "rest"
             hud = targetHud;
             if (frame == null || slide == null)
             {
                 Debug.LogWarning("[VR Armory] FunctionCheck needs frame and slide references.");
                 return;
             }
-            BuildRig();
+            if (!rigBuilt) BuildRig();
             IsRunning = true;
             check = Check.SafeOn;
             Say(null);
@@ -90,12 +107,16 @@ namespace VRArmory
 
         void Update()
         {
-            if (!IsRunning || Cursor.lockState != CursorLockMode.Locked) return;
-            if (AssemblyPart.HeldParts.Count > 0) return; // main hand busy
+            if (!IsRunning) return;
 
-            if (Input.GetKeyDown(KeyCode.V)) SetSafety(!safetyOn);
-            SetTrigger(Mathf.MoveTowards(triggerPull, Input.GetKey(KeyCode.T) ? 1f : 0f, Time.deltaTime / (Input.GetKey(KeyCode.T) ? triggerPullTime : 0.15f)));
-            SetSlide(Mathf.MoveTowards(slideAmount, Input.GetKey(KeyCode.G) ? 1f : 0f, Time.deltaTime / slideRackTime));
+            // Desktop keys only while the cursor is captured and the main hand is free. The lockwork animation
+            // below runs regardless, so VR (or any other caller of the Set* methods) is animated too.
+            if (desktopInput && Cursor.lockState == CursorLockMode.Locked && AssemblyPart.HeldParts.Count == 0)
+            {
+                if (Input.GetKeyDown(KeyCode.V)) SetSafety(!safetyOn);
+                SetTrigger(Mathf.MoveTowards(triggerPull, Input.GetKey(KeyCode.T) ? 1f : 0f, Time.deltaTime / (Input.GetKey(KeyCode.T) ? triggerPullTime : 0.15f)));
+                SetSlide(Mathf.MoveTowards(slideAmount, Input.GetKey(KeyCode.G) ? 1f : 0f, Time.deltaTime / slideRackTime));
+            }
 
             Animate();
             if (lastEventTimer > 0f && (lastEventTimer -= Time.deltaTime) <= 0f) Say(null);
@@ -160,11 +181,13 @@ namespace VRArmory
             }
             if (amount <= 0f && prev > 0f && check == Check.RackHeld)
             {
-                if (rackedWhileHeld && hammerCocked) Advance();
+                // needsReset = the trigger is still held from the double-action pull. If it was let go before the
+                // slide went forward, the reset already happened and check 6 could never be reached.
+                if (rackedWhileHeld && hammerCocked && needsReset) Advance();
                 else
                 {
+                    Notify(rackedWhileHeld ? "TRIGGER RELEASED TOO EARLY - SQUEEZE, HOLD, RACK AGAIN" : "HOLD THE TRIGGER BACK WHILE RACKING");
                     rackedWhileHeld = false;
-                    Notify("HOLD THE TRIGGER BACK WHILE RACKING");
                 }
             }
         }
@@ -174,6 +197,7 @@ namespace VRArmory
             hammerCocked = false;
             needsReset = true;
             Play(fallClip, 1f);
+            HammerFell?.Invoke();
             Notify(doubleAction ? "DOUBLE ACTION - HAMMER FELL" : "SINGLE ACTION - HAMMER FELL");
             if (check == Check.DoubleAction && doubleAction) Advance();
             else if (check == Check.SingleAction && !doubleAction) Advance();
@@ -185,7 +209,9 @@ namespace VRArmory
             Say(null);
             if (check == Check.Done)
             {
+                // From here on the manager owns the HUD (final summary); the lockwork stays operable but silent.
                 Passed = true;
+                lastEventTimer = 0f;
                 Completed?.Invoke();
             }
         }
@@ -224,20 +250,32 @@ namespace VRArmory
             upRaw -= Vector3.Dot(upRaw, muzzle) * muzzle;
             Vector3 up = Cardinal(upRaw);
             Vector3 lateral = Vector3.Cross(muzzle, up).normalized;
+            muzzleLocal = muzzle;
 
             slideBackLocal = slideRestLocal - muzzle * (slideTravel / f.lossyScale.x);
 
             hammer = MakePiece(f, FindPiece(f, "Hammer"), muzzle, up, lateral, -1f, true);
             trigger = MakePiece(f, FindPiece(f, "Trigger_Shoe"), muzzle, up, lateral, 1f, false);
-            lever = MakePiece(f, FindPiece(slideT, "Safety"), muzzle, up, lateral, 0f, false);
+
+            // The slide carries both Ambi_Safety_Lever and Safety_Axle; a plain "Safety" search picked the axle.
+            Transform leverT = FindPiece(slideT, "Ambi_Safety_Lever");
+            if (leverT == null) leverT = FindPiece(slideT, "Safety");
+            lever = MakePiece(f, leverT, muzzle, up, lateral, 0f, false);
+            Transform axle = FindPiece(slideT, "Safety_Axle");
+            if (lever != null && axle != null)
+            {
+                // The lever turns about its axle, not about its own centre.
+                lever.pivot = lever.t.parent.InverseTransformPoint(f.TransformPoint(LocalBounds(f, axle).center));
+            }
 
             audioSource = GetComponent<AudioSource>();
             if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false;
             audioSource.spatialBlend = 0f;
-            fallClip = MakeClick("Hammer_Fall", 0.035f, 2200f, 1f);
-            resetClip = MakeClick("Trigger_Reset", 0.012f, 4200f, 0.5f);
-            leverClip = MakeClick("Safety_Lever", 0.02f, 3000f, 0.6f);
+            fallClip = ProceduralAudio.MakeClick("Hammer_Fall", 0.035f, 2200f, 1f);
+            resetClip = ProceduralAudio.MakeClick("Trigger_Reset", 0.012f, 4200f, 0.5f);
+            leverClip = ProceduralAudio.MakeClick("Safety_Lever", 0.02f, 3000f, 0.6f);
+            rigBuilt = true;
         }
 
         // pivotEnd: -1 = rotate about the end opposite 'up' (hammer base), +1 = the 'up' end (trigger top), 0 = centre.
@@ -317,33 +355,14 @@ namespace VRArmory
 
         private void Say(string evt)
         {
-            if (hud == null) return;
-            string d = Directives[(int)check];
+            if (hud == null || Passed) return;
+            string d = string.Format(Directives[(int)check], safetyControl, triggerControl, rackControl);
             hud.SetDirective(evt != null ? $"{evt}   >>   {d}" : d, check == Check.Done ? Green : Amber);
         }
 
         private void Play(AudioClip clip, float volume)
         {
             if (audioSource != null && clip != null) audioSource.PlayOneShot(clip, volume);
-        }
-
-        // Short decaying metallic click (no audio assets in the project yet).
-        private static AudioClip MakeClick(string name, float length, float freq, float gain)
-        {
-            const int rate = 44100;
-            int n = Mathf.CeilToInt(length * rate);
-            float[] data = new float[n];
-            System.Random rng = new System.Random(name.GetHashCode());
-            for (int i = 0; i < n; i++)
-            {
-                float t = (float)i / rate;
-                float env = Mathf.Exp(-t / (length * 0.25f));
-                float noise = (float)rng.NextDouble() * 2f - 1f;
-                data[i] = gain * env * (0.6f * noise + 0.4f * Mathf.Sin(2f * Mathf.PI * freq * t));
-            }
-            AudioClip clip = AudioClip.Create(name, n, 1, rate, false);
-            clip.SetData(data, 0);
-            return clip;
         }
     }
 }

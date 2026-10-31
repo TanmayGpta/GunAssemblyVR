@@ -19,6 +19,7 @@ namespace VRArmory.Editor
                 Debug.LogWarning("[VR Armory] Exit Play mode before setting up assembly.");
                 return;
             }
+            if (!ArmoryEditorGuard.Confirm("Setup Phase 02 Assembly", "Re-creates the assembly step list on Gun_Assembly_Manager (any edits to the steps are replaced).")) return;
 
             GameObject station = GameObject.Find("ArmorerStation");
             Transform parts = station != null ? station.transform.Find("Staged_Gun_Parts") : null;
@@ -146,6 +147,7 @@ namespace VRArmory.Editor
                 Debug.LogWarning("[VR Armory] Exit Play mode before re-staging parts.");
                 return;
             }
+            if (!ArmoryEditorGuard.Confirm("Re-Stage Gun Parts", "Moves all five gun modules back to their bench row and recomputes every socket seat pose.")) return;
 
             GameObject station = GameObject.Find("ArmorerStation");
             Transform parts = station != null ? station.transform.Find("Staged_Gun_Parts") : null;

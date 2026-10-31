@@ -49,9 +49,13 @@ namespace VRArmory
         public void SetDirective(string text, Color color)
         {
             if (directive == null) return;
+            // Assigning the same text still rebuilds the text mesh, so skip unchanged updates.
+            if (directive.text == text && directive.color == color) return;
             directive.text = text;
             directive.color = color;
         }
+
+        public string DirectiveText => directive != null ? directive.text : null;
 
         public void SetFooter(string text)
         {

@@ -22,6 +22,7 @@ namespace VRArmory.Editor
                 Debug.LogWarning("[VR Armory] Exit Play mode before building set dressing.");
                 return;
             }
+            if (!ArmoryEditorGuard.Confirm("Build Armory Set Dressing", "Destroys Armory_Facility/Set_Dressing and builds a new one.")) return;
 
             GameObject facility = GameObject.Find("Armory_Facility");
             if (facility == null)

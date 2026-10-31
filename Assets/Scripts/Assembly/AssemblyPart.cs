@@ -38,6 +38,7 @@ namespace VRArmory
         private MaterialPropertyBlock block;
         private bool isAnimating;
         private bool claimedOnRelease;
+        private bool layersHidden;
 
         void Awake()
         {
@@ -72,18 +73,23 @@ namespace VRArmory
             }
         }
 
-        public bool BeginGrab()
+        // hideFromAimRay: the desktop interactor's centre-screen ray must pass through the part it holds.
+        // VR passes false, because the other hand has to be able to touch a held part for a two-handed grab.
+        public bool BeginGrab(bool hideFromAimRay = true)
         {
             if (!IsGrabbable) return false;
             if (OffHand == this) OffHand = null; // hand-over from off hand to main hand
             IsHeld = true;
             HeldParts.Add(this);
             SetHighlight(false);
-            // Held part must not block the interactor's aim ray.
-            for (int i = 0; i < colliders.Length; i++)
+            layersHidden = hideFromAimRay;
+            if (hideFromAimRay)
             {
-                colliderLayers[i] = colliders[i].gameObject.layer;
-                colliders[i].gameObject.layer = 2; // Ignore Raycast
+                for (int i = 0; i < colliders.Length; i++)
+                {
+                    colliderLayers[i] = colliders[i].gameObject.layer;
+                    colliders[i].gameObject.layer = 2; // Ignore Raycast
+                }
             }
             return true;
         }
@@ -154,6 +160,8 @@ namespace VRArmory
         {
             IsHeld = false;
             HeldParts.Remove(this);
+            if (!layersHidden) return;
+            layersHidden = false;
             for (int i = 0; i < colliders.Length; i++)
             {
                 colliders[i].gameObject.layer = colliderLayers[i];
@@ -162,7 +170,20 @@ namespace VRArmory
 
         private IEnumerator SeatRoutine(Transform seat, float duration, Action onSeated)
         {
-            yield return MoveRoutine(seat.position, seat.rotation, duration, null);
+            // Animate in the host's space, so the part lands on the seat even while the host
+            // is being carried around in the other hand (VR).
+            isAnimating = true;
+            Transform host = seat.parent;
+            Vector3 startPos = host.InverseTransformPoint(transform.position);
+            Quaternion startRot = Quaternion.Inverse(host.rotation) * transform.rotation;
+            for (float t = 0f; t < duration; t += Time.deltaTime)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, t / duration);
+                transform.position = host.TransformPoint(Vector3.Lerp(startPos, seat.localPosition, k));
+                transform.rotation = host.rotation * Quaternion.Slerp(startRot, seat.localRotation, k);
+                yield return null;
+            }
+            isAnimating = false;
 
             // Lock as a child of the receiving sub-assembly at the exact seat pose.
             transform.SetParent(seat.parent, true);
