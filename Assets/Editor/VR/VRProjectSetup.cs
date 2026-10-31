@@ -102,6 +102,15 @@ namespace VRArmory.Editor
             // "Optimize Buffer Discards" is a Vulkan-only option of the Meta Quest feature; this project renders with GLES3.
             var questFeature = new SerializedObject(settings.GetFeature<MetaQuestFeature>());
             questFeature.FindProperty("optimizeBufferDiscards").boolValue = false;
+            // Targeting Quest Pro ("cambria") makes OpenXR add a *required* eye-tracking feature to the manifest,
+            // which a Quest 3S (no eye tracking) would refuse. Target Quest 2 / 3 / 3S only.
+            SerializedProperty devices = questFeature.FindProperty("targetDevices");
+            for (int i = 0; i < devices.arraySize; i++)
+            {
+                SerializedProperty d = devices.GetArrayElementAtIndex(i);
+                string device = d.FindPropertyRelative("manifestName").stringValue;
+                d.FindPropertyRelative("enabled").boolValue = device == "quest2" || device == "eureka" || device == "quest3s";
+            }
             questFeature.ApplyModifiedProperties();
             EnableFeature<OculusTouchControllerProfile>(settings);          // Quest 2 / Pro style mapping
             EnableFeature<MetaQuestTouchPlusControllerProfile>(settings);   // Quest 3 / 3S Touch Plus controllers
