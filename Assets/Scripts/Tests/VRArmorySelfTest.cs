@@ -594,15 +594,14 @@ namespace VRArmory.Tests
             Vector3 target = button.transform.position;
             h.grip = false; h.trigger = false; h.triggerValue = -1f;
             h.pos = origin.transform.position + new Vector3(0f, 1.3f, 0.15f);
-            // Aim the ray origin at the button. The Starter Assets ray follows a smoothed ("stabilized") copy of the
-            // controller, so it lags behind: keep correcting until it points at the button.
-            for (int i = 0; i < 60 && Vector3.Angle(ray.rayOriginTransform.forward, target - ray.rayOriginTransform.position) > 0.5f; i++)
-            {
-                Transform rayOrigin = ray.rayOriginTransform;
-                Quaternion correction = Quaternion.FromToRotation(rayOrigin.forward, (target - rayOrigin.position).normalized);
-                h.rot = correction * h.rot;
-                yield return Frames(3);
-            }
+            // Point the controller at the button once. The Starter Assets ray follows a smoothed ("stabilized") copy
+            // of the controller pose, so wait for it to settle instead of correcting while it is still moving.
+            h.rot = Quaternion.LookRotation(target - h.pos);
+            for (int i = 0; i < 120 && Vector3.Angle(ray.rayOriginTransform.forward, target - ray.rayOriginTransform.position) > 0.5f; i++)
+                yield return Frames(1);
+            // Like a user: hold still until the ray is settled over the button, then pull the trigger.
+            for (int i = 0; i < 60 && !ray.IsOverUIGameObject(); i++) yield return Frames(1);
+            yield return Frames(10);
             bool hit = ray.TryGetCurrentUIRaycastResult(out RaycastResult result) && result.gameObject != null && result.gameObject.transform.IsChildOf(button.transform);
             Transform ro = ray.rayOriginTransform;
             ray.TryGetCurrentRaycast(out RaycastHit? hit3d, out int _, out RaycastResult? uiHit, out int _, out bool isUI);
