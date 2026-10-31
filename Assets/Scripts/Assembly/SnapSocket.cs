@@ -31,8 +31,12 @@ namespace VRArmory
         public float LastAngle { get; private set; }
         public bool IsUnlocked { get; private set; }
         public bool IsFilled { get; private set; }
+        // The sub-assembly this socket is mounted on (null if it sits directly in the scene).
+        public AssemblyPart Host { get; private set; }
 
         public event Action<SnapSocket> Seated;
+        // A part was released near this socket but not seated (reason text for the HUD).
+        public event Action<SnapSocket, AssemblyPart, string> Rejected;
 
         public static readonly List<SnapSocket> All = new List<SnapSocket>();
 
@@ -47,11 +51,14 @@ namespace VRArmory
         private float warningFlashTimer;
         private float confirmTimer;
         private const float ConfirmDuration = 0.8f;
+        private AssemblyPart wrongPartShown;
+        private string wrongPartReason;
 
         private bool HintsEnabled => GunAssemblyManager.Instance == null || GunAssemblyManager.Instance.HintsEnabled;
 
         void Awake()
         {
+            Host = GetComponentInParent<AssemblyPart>();
             BuildGhost();
         }
 
@@ -102,7 +109,7 @@ namespace VRArmory
                 return;
             }
 
-            AssemblyPart held = AssemblyPart.HeldParts.Count > 0 ? AssemblyPart.HeldParts[0] : null;
+            AssemblyPart held = PickHeldPart();
             Evaluate(held);
 
             if (!HintsEnabled)
@@ -139,6 +146,36 @@ namespace VRArmory
             }
         }
 
+        // With two hands several parts can be held at once (e.g. the slide in one hand, the barrel in the other).
+        // The part this socket accepts wins; otherwise the nearest held part that isn't this socket's own host.
+        private AssemblyPart PickHeldPart()
+        {
+            AssemblyPart nearest = null;
+            float best = float.MaxValue;
+            foreach (AssemblyPart p in AssemblyPart.HeldParts)
+            {
+                if (p == acceptedPart) return p;
+                if (transform.IsChildOf(p.transform)) continue;
+                float d = (p.transform.position - transform.position).sqrMagnitude;
+                if (d < best)
+                {
+                    best = d;
+                    nearest = p;
+                }
+            }
+            return nearest;
+        }
+
+        // True when some other socket still waits for this part, i.e. it is a later step rather than a wrong part.
+        private static bool IsNeededLater(AssemblyPart part)
+        {
+            foreach (SnapSocket s in All)
+            {
+                if (s.acceptedPart == part && !s.IsFilled) return true;
+            }
+            return false;
+        }
+
         private void Evaluate(AssemblyPart held)
         {
             WarningReason = null;
@@ -156,7 +193,16 @@ namespace VRArmory
             {
                 // Only the active socket calls out a wrong part, and only when it's brought right up to it.
                 CurrentAlignment = IsUnlocked && LastDistance <= snapDistance * 2f ? Alignment.Warning : Alignment.Hidden;
-                if (CurrentAlignment == Alignment.Warning) WarningReason = "WRONG PART FOR THIS SOCKET";
+                if (CurrentAlignment == Alignment.Warning)
+                {
+                    // Built once per part, not every frame.
+                    if (held != wrongPartShown)
+                    {
+                        wrongPartShown = held;
+                        wrongPartReason = WrongPartReason(held);
+                    }
+                    WarningReason = wrongPartReason;
+                }
                 return;
             }
 
@@ -194,10 +240,27 @@ namespace VRArmory
             }
 
             // Released near the socket but wrong part / wrong angle / out of sequence.
-            if (part == acceptedPart ? dist <= hintRange : IsUnlocked && dist <= snapDistance * 2f)
+            bool seatingAttempt = dist <= snapDistance * 2f;
+            if (part == acceptedPart ? dist <= hintRange : IsUnlocked && seatingAttempt)
             {
                 warningFlashTimer = 0.6f;
+                // Only a release right at the socket counts as a failed attempt. Putting a part back down on the
+                // bench near its socket (the parts are laid out close together) just flashes, as before.
+                if (seatingAttempt) Rejected?.Invoke(this, part, RejectReason(part, dist, angle));
             }
+        }
+
+        private string WrongPartReason(AssemblyPart part)
+        {
+            return IsNeededLater(part) ? $"OUT OF SEQUENCE - {part.name} IS A LATER STEP" : "WRONG PART FOR THIS SOCKET";
+        }
+
+        private string RejectReason(AssemblyPart part, float dist, float angle)
+        {
+            if (part != acceptedPart) return WrongPartReason(part);
+            if (!IsUnlocked) return "OUT OF SEQUENCE - COMPLETE THE CURRENT STEP FIRST";
+            if (dist > snapDistance) return $"NOT CLOSE ENOUGH - {dist * 100f:0.0} cm FROM THE GHOST (MAX {snapDistance * 100f:0} cm)";
+            return $"MISALIGNED - {angle:0} deg OFF (MAX {snapAngle:0} deg). ROTATE TO MATCH THE GHOST";
         }
 
         private void OnSnapComplete()

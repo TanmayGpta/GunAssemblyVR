@@ -15,6 +15,8 @@ namespace VRArmory.Editor
             {
                 return;
             }
+            if (!ArmoryEditorGuard.Confirm("Setup Workbench and Gun Parts",
+                "Rebuilds the room, player and Tactical HUD (HUD children are destroyed and recreated). Gun modules already staged by Re-Stage Gun Parts are left untouched, and assembly sockets are never purged.")) return;
 
             AssetDatabase.Refresh();
 
@@ -55,7 +57,7 @@ namespace VRArmory.Editor
             // 1. SOLIDIFY, PURGE JUNK & RENAME MODULE 01: LOWER FRAME
             // =========================================================
             Transform tFrame = partsContainer.Find("01_Lower_Frame");
-            if (tFrame != null)
+            if (tFrame != null && !ArmoryEditorGuard.IsStaged(tFrame))
             {
                 Transform mainFrame = FindPart(tFrame, "Frame_Body", "frame_");
                 Transform leftGrip = FindPart(tFrame, "Grip_Panel_Left", "left_grip_");
@@ -132,7 +134,7 @@ namespace VRArmory.Editor
             // 2. SOLIDIFY, PURGE JUNK & RENAME MODULE 02: UPPER SLIDE
             // =========================================================
             Transform tSlide = partsContainer.Find("02_Upper_Slide");
-            if (tSlide != null)
+            if (tSlide != null && !ArmoryEditorGuard.IsStaged(tSlide))
             {
                 Transform mainSlide = FindPart(tSlide, "Slide_Body", "slide_");
                 Transform rearSight = FindPart(tSlide, "Rear_Sight", "rear_sight_");
@@ -182,7 +184,7 @@ namespace VRArmory.Editor
             // 3. SOLIDIFY, PURGE JUNK & RENAME MODULE 03: BARREL
             // =========================================================
             Transform tBarrel = partsContainer.Find("03_Barrel");
-            if (tBarrel != null)
+            if (tBarrel != null && !ArmoryEditorGuard.IsStaged(tBarrel))
             {
                 Transform mainBarrel = FindPart(tBarrel, "Barrel_Assembly", "barrel_");
                 Transform lockingBlock = FindPart(tBarrel, "Locking_Block", "locking_block_");
@@ -214,7 +216,7 @@ namespace VRArmory.Editor
             // 4. SOLIDIFY, PURGE JUNK & RENAME MODULE 04: RECOIL SPRING
             // =========================================================
             Transform tSpring = partsContainer.Find("04_Recoil_Spring");
-            if (tSpring != null)
+            if (tSpring != null && !ArmoryEditorGuard.IsStaged(tSpring))
             {
                 Transform guide = FindPart(tSpring, "Guide_Rod", "recoil_spring_guide_");
                 Transform spring = FindPart(tSpring, "Recoil_Spring", "recoil_spring_");
@@ -246,7 +248,7 @@ namespace VRArmory.Editor
             // 5. SOLIDIFY, PURGE JUNK & RENAME MODULE 05: MAGAZINE
             // =========================================================
             Transform tMag = partsContainer.Find("05_15Rd_Magazine");
-            if (tMag != null)
+            if (tMag != null && !ArmoryEditorGuard.IsStaged(tMag))
             {
                 Transform mainMag = FindPart(tMag, "Magazine_Tube", "magazine_");
                 Transform baseplate = FindPart(tMag, "Magazine_Floorplate", "magazine_baseplate_");
@@ -328,7 +330,8 @@ namespace VRArmory.Editor
             List<GameObject> toDestroy = new List<GameObject>();
             foreach (Transform c in parent)
             {
-                if (!kept.Contains(c))
+                // Assembly sockets live under the modules too; deleting them broke every assembly step.
+                if (!kept.Contains(c) && c.GetComponent<SnapSocket>() == null)
                 {
                     toDestroy.Add(c.gameObject);
                 }
@@ -499,6 +502,7 @@ namespace VRArmory.Editor
             {
                 return;
             }
+            if (!ArmoryEditorGuard.Confirm("Build Live-Fire Range", "Destroys the Shooting_Range object and builds a new one.")) return;
 
             // Re-apply corrected room shell so the armory butts cleanly against the corridor.
             SetupArmoryEnvironment();
