@@ -59,16 +59,22 @@ namespace VRArmory
 
         public void SetHighlight(bool on)
         {
+            SetHighlight(on ? 0.45f : 0f);
+        }
+
+        // Partial tint toward highlightColor (0 = off), e.g. the pulsing "pick me up" glow of the VR guidance.
+        public void SetHighlight(float amount)
+        {
             foreach (Renderer r in renderers)
             {
                 if (r == null) continue;
-                if (!on || r.sharedMaterial == null || !r.sharedMaterial.HasProperty("_Color"))
+                if (amount <= 0f || r.sharedMaterial == null || !r.sharedMaterial.HasProperty("_Color"))
                 {
                     r.SetPropertyBlock(null);
                     continue;
                 }
                 block.Clear();
-                block.SetColor("_Color", Color.Lerp(r.sharedMaterial.color, highlightColor, 0.45f));
+                block.SetColor("_Color", Color.Lerp(r.sharedMaterial.color, highlightColor, amount));
                 r.SetPropertyBlock(block);
             }
         }
