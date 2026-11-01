@@ -24,6 +24,27 @@ namespace VRArmory
             return clip;
         }
 
+        // Soft rising chime (one sine note per frequency) for a success moment.
+        public static AudioClip MakeChime(string name, float noteLength, float gain, params float[] freqs)
+        {
+            const int rate = 44100;
+            int noteSamples = Mathf.CeilToInt(noteLength * rate);
+            int n = noteSamples * (freqs.Length + 2); // the last note rings out
+            float[] data = new float[n];
+            for (int k = 0; k < freqs.Length; k++)
+            {
+                for (int i = 0; i < n - k * noteSamples; i++)
+                {
+                    float t = (float)i / rate;
+                    float env = Mathf.Clamp01(t / 0.008f) * Mathf.Exp(-t / (noteLength * 1.2f));
+                    data[k * noteSamples + i] += gain * env * (Mathf.Sin(2f * Mathf.PI * freqs[k] * t) + 0.25f * Mathf.Sin(4f * Mathf.PI * freqs[k] * t)) / freqs.Length;
+                }
+            }
+            AudioClip clip = AudioClip.Create(name, n, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
         // Low two-tone buzz for a rejected action.
         public static AudioClip MakeBuzz(string name, float length, float freq, float gain)
         {

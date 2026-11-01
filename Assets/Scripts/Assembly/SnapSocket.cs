@@ -24,6 +24,12 @@ namespace VRArmory
         [Tooltip("Socket-local direction the part enters from; the path line is drawn from here to the seat.")]
         public Vector3 insertionDirection = new Vector3(0f, 0f, -1f);
         public float insertionPathLength = 0.12f;
+        [Tooltip("Correct part at a wrong angle: amber ghost. The VR guidance turns this off and explains the correction instead.")]
+        public bool amberWhenMisaligned = true;
+        [Tooltip("Added to the ghost's opacity while the correct part is being carried (VR makes the target easier to find).")]
+        public float faintAlphaBoost = 0f;
+        [Tooltip("Draw the insertion path line. The VR guidance draws its own line from the held part instead.")]
+        public bool showInsertionPath = true;
 
         public Alignment CurrentAlignment { get; private set; }
         public string WarningReason { get; private set; }
@@ -134,14 +140,16 @@ namespace VRArmory
                 case Alignment.Faint:
                     // Brighten gradually as the part approaches.
                     float near = 1f - Mathf.Clamp01((LastDistance - snapDistance) / hintRange);
-                    ShowGhost(new Color(FaintColor.r, FaintColor.g, FaintColor.b, FaintColor.a + near * 0.15f), true);
+                    ShowGhost(new Color(FaintColor.r, FaintColor.g, FaintColor.b, FaintColor.a + faintAlphaBoost + near * 0.15f), true);
                     break;
                 case Alignment.Valid:
                     float pulse = 0.55f + 0.45f * Mathf.Sin(Time.time * 10f);
                     ShowGhost(new Color(ValidColor.r, ValidColor.g, ValidColor.b, ValidColor.a * pulse + 0.15f), true);
                     break;
                 case Alignment.Warning:
-                    ShowGhost(IsUnlocked && held == acceptedPart ? AmberColor : RedColor, true);
+                    bool correctPart = IsUnlocked && held == acceptedPart;
+                    Color calm = new Color(FaintColor.r, FaintColor.g, FaintColor.b, FaintColor.a + faintAlphaBoost + 0.15f);
+                    ShowGhost(correctPart ? (amberWhenMisaligned ? AmberColor : calm) : RedColor, true);
                     break;
             }
         }
@@ -311,6 +319,7 @@ namespace VRArmory
             if (ghostRoot == null) return;
             ghostRoot.SetActive(true);
             ghostMat.SetColor("_Color", color);
+            showPath &= showInsertionPath;
             pathLine.enabled = showPath;
             if (showPath)
             {

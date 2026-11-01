@@ -148,6 +148,11 @@ namespace VRArmory.Tests
                 $"XRInteractionManagers = {FindObjectsOfType<XRInteractionManager>().Length}");
             Check("scene-wiring", mgr != null && fc != null && hud != null && FindObjectsOfType<AssemblyPart>().Length == 5 && SnapSocket.All.Count == 4);
             Check("desktop-starts-immediately", mgr.HasStarted && mgr.CurrentStepIndex == 0 && S("Socket_Barrel").IsUnlocked);
+            // Version 1.1 UX is VR-only: the desktop HUD stays the instruction panel and nothing VR leaks in.
+            Check("v11-desktop-hud-visible", hud.GetComponent<Canvas>().enabled);
+            Check("v11-desktop-no-vr-guidance", FindObjectsOfType<VRPlacementAssist>().Length == 0 && FindObjectsOfType<VRGuidance>().Length == 0
+                                                && FindObjectsOfType<VRTrainingMenu>().Length == 0);
+            Check("v11-desktop-socket-style-unchanged", S("Socket_Barrel").amberWhenMisaligned && S("Socket_Barrel").faintAlphaBoost == 0f && S("Socket_Barrel").showInsertionPath);
 
             // Rejections (audit tests), now with feedback + mistake count.
             yield return Place(P(GunPart.RecoilSpring), S("Socket_RecoilSpring"), Quaternion.identity);
@@ -345,16 +350,33 @@ namespace VRArmory.Tests
             FindScene();
             origin = FindObjectOfType<XROrigin>();
             menu = FindObjectOfType<VRTrainingMenu>();
+            guide = FindObjectOfType<VRGuidance>();
             Check("vr-mode-active", VRPlatformSwitch.IsVR && origin != null && GameObject.Find("Armorer_Player") == null);
             Check("single-xr-manager", FindObjectsOfType<XRInteractionManager>().Length == 1, $"count={FindObjectsOfType<XRInteractionManager>().Length}");
             Check("single-event-system", FindObjectsOfType<EventSystem>().Length == 1);
             Check("single-audio-listener", FindObjectsOfType<AudioListener>().Length == 1);
             Check("single-enabled-camera", Array.FindAll(FindObjectsOfType<Camera>(), c => c.enabled).Length == 1);
-            Check("vr-waits-for-start", !mgr.HasStarted && menu.introPanel.activeSelf, "intro panel shown, assembly locked until START");
+            // v1.1: the first screen is module selection (was: the briefing). The assembly is still locked until START.
+            Check("vr-waits-for-start", !mgr.HasStarted && menu.modulesPanel.activeSelf && !menu.introPanel.activeSelf, "module selection shown, assembly locked");
             Check("fc-desktop-keys-off", !fc.desktopInput && fc.triggerControl.Contains("TRIGGER"));
             Check("all-part-grabs-enabled", Array.TrueForAll(FindObjectsOfType<VRAssemblyGrab>(true), g => g.enabled));
             int shadowLights = Array.FindAll(FindObjectsOfType<Light>(), l => l.shadows != LightShadows.None).Length;
             Check("quest-shadow-budget", shadowLights <= 2, $"shadow-casting lights in VR = {shadowLights}");
+
+            // ---- v1.1: exactly one instruction interface
+            Canvas hudCanvas = hud.GetComponent<Canvas>();
+            Canvas menuCanvas = menu.GetComponent<Canvas>();
+            // Any other drawn canvas that gives instructions (AssemblyHUD) or can be pointed at (a raycaster). The armory's
+            // wall signs (Range_Sign_Text, Pegboard_Label, ...) are scenery and do not count.
+            Canvas[] others = Array.FindAll(FindObjectsOfType<Canvas>(), c => c.enabled && c.isRootCanvas && c != menuCanvas && !c.transform.IsChildOf(guide.transform)
+                && (c.GetComponent<AssemblyHUD>() != null || Array.Exists(c.GetComponents<BaseRaycaster>(), r => r.enabled)));
+            int raycasters = Array.FindAll(FindObjectsOfType<TrackedDeviceGraphicRaycaster>(), r => r.isActiveAndEnabled).Length;
+            Check("v11-single-instruction-interface", !hudCanvas.enabled && FindObjectsOfType<VRTrainingMenu>().Length == 1 && others.Length == 0 && raycasters == 1,
+                $"hud drawn={hudCanvas.enabled} other canvases=[{string.Join(",", Array.ConvertAll(others, c => c.name))}] ui raycasters={raycasters}");
+            Vector3 toPanel = menu.transform.position - origin.transform.position;
+            Check("v11-panel-in-front", Mathf.Abs(toPanel.x) < 0.2f && toPanel.z > 1f && toPanel.z < 1.6f && menu.transform.position.y > 1.25f,
+                $"panel {toPanel} from the stand point");
+            Check("v11-assist-added-to-every-part", FindObjectsOfType<VRPlacementAssist>().Length == 5);
 
             hmd = InputSystem.AddDevice<XRSimulatedHMD>();
             left = InputSystem.AddDevice<XRSimulatedController>("SimLeft");
@@ -362,8 +384,9 @@ namespace VRArmory.Tests
             InputSystem.SetDeviceUsage(left, InputCommonUsages.LeftHand);
             InputSystem.SetDeviceUsage(right, InputCommonUsages.RightHand);
             Vector3 stand = origin.transform.position;
-            L = new Hand { device = left, pos = stand + new Vector3(-0.25f, 1.1f, 0.3f) };
-            R = new Hand { device = right, pos = stand + new Vector3(0.25f, 1.1f, 0.3f) };
+            Vector3 leftRest = stand + new Vector3(-0.25f, 1.1f, 0.3f), rightRest = stand + new Vector3(0.25f, 1.1f, 0.3f);
+            L = new Hand { device = left, pos = leftRest };
+            R = new Hand { device = right, pos = rightRest };
             SendHead();
             yield return Frames(5);
             Camera cam = origin.Camera;
@@ -376,20 +399,74 @@ namespace VRArmory.Tests
             Check("controllers-tracked", lc != null && Vector3.Distance(lc.transform.position, L.pos) < 0.01f,
                 $"left controller at {lc?.transform.position}, sent {L.pos}");
 
+            // ---- v1.1: module selection -> coming soon -> back -> gun assembly -> briefing -> start
+            yield return PressButton(R, menu.shootingModuleButton);
+            Check("v11-shooting-shows-coming-soon", menu.comingSoonPanel.activeSelf && !mgr.HasStarted);
+            yield return PressButton(R, menu.comingSoonBackButton);
+            Check("v11-coming-soon-back", menu.modulesPanel.activeSelf && !menu.comingSoonPanel.activeSelf);
+            yield return PressButton(R, menu.assemblyModuleButton);
+            Check("v11-assembly-module-opens-briefing", menu.introPanel.activeSelf && !mgr.HasStarted);
+
             // ---- UI: point the right ray at START and pull the trigger
             yield return PressButton(R, menu.startButton);
             Check("ui-start-button", mgr.HasStarted && menu.progressPanel.activeSelf && S("Socket_Barrel").IsUnlocked,
                 $"started={mgr.HasStarted}");
+            yield return Frames(2);
+            Check("v11-step1-barrel-highlighted", guide.CurrentPhase == VRGuidance.Phase.PickUp && guide.HighlightedPart == P(GunPart.Barrel)
+                                                  && menu.headlineText.text == VRTrainingText.PickUp(GunPart.Barrel),
+                $"phase={guide.CurrentPhase} highlighted={guide.HighlightedPart?.name} headline='{menu.headlineText.text}'");
 
             // ---- Rejections through real grabs
             yield return GrabAndRelease(L, P(GunPart.RecoilSpring), S("Socket_RecoilSpring"), Quaternion.identity, false);
             Check("vr-out-of-sequence-rejected", !S("Socket_RecoilSpring").IsFilled && mgr.MistakeCount == 1, $"mistakes={mgr.MistakeCount} hud='{hud.DirectiveText}'");
+            Check("v11-rejection-explained-on-panel", menu.ShownFeedback == VRTrainingMenu.Feedback.Error && menu.feedbackText.text == VRTrainingText.RejectOutOfSequence,
+                menu.feedbackText.text);
             yield return Hold(0.5f);
             Check("vr-part-returned-to-bench", P(GunPart.RecoilSpring).IsGrabbable && !P(GunPart.RecoilSpring).IsHeld);
 
             yield return GrabAndRelease(R, P(GunPart.Barrel), S("Socket_Barrel"), Quaternion.Euler(0f, 0f, 40f), false);
             Check("vr-misaligned-rejected", !S("Socket_Barrel").IsFilled && hud.DirectiveText.Contains("MISALIGNED"), hud.DirectiveText);
             yield return Hold(0.5f);
+
+            // ---- v1.1: the assist never pulls in a wrong part or an out-of-sequence part (grip held, no release)
+            AssemblyPart mag = P(GunPart.Magazine);
+            yield return GrabAt(L, mag);
+            yield return CarryTo(L, mag, () => SeatPose(S("Socket_Barrel")), 0.8f);
+            Check("v11-assist-rejects-wrong-part", !S("Socket_Barrel").IsFilled && mag.IsHeld && guide.WrongPartHeld == mag
+                                                   && menu.ShownFeedback == VRTrainingMenu.Feedback.Error,
+                $"filled={S("Socket_Barrel").IsFilled} held={mag.IsHeld} wrong={guide.WrongPartHeld?.name} feedback={menu.ShownFeedback}");
+            yield return ReleaseAt(L, leftRest);
+            AssemblyPart spring = P(GunPart.RecoilSpring);
+            yield return GrabAt(L, spring);
+            yield return CarryTo(L, spring, () => SeatPose(S("Socket_RecoilSpring")), 0.8f);
+            Check("v11-assist-rejects-out-of-sequence", !S("Socket_RecoilSpring").IsFilled && spring.IsHeld && !spring.GetComponent<VRPlacementAssist>().IsAssisting,
+                $"filled={S("Socket_RecoilSpring").IsFilled} held={spring.IsHeld}");
+            yield return ReleaseAt(L, leftRest);
+            yield return Hold(0.5f);
+
+            // ---- v1.1: target guidance and directions computed from the real pose error (right = +X, forward = +Z here)
+            AssemblyPart barrel = P(GunPart.Barrel);
+            SnapSocket barrelSocket = S("Socket_Barrel");
+            Transform view = cam.transform;
+            yield return GrabAt(R, barrel);
+            yield return Hold(0.3f);
+            Check("v11-target-guidance-on-grab", guide.CurrentPhase == VRGuidance.Phase.Place && guide.TargetSocket == barrelSocket && guide.GuideLineVisible
+                                                 && menu.headlineText.text == VRTrainingText.Place(GunPart.Barrel),
+                $"phase={guide.CurrentPhase} target={guide.TargetSocket?.name} line={guide.GuideLineVisible} headline='{menu.headlineText.text}'");
+            yield return CarryTo(R, barrel, () => new Pose(barrelSocket.transform.position + view.right * 0.10f, barrelSocket.transform.rotation), 0.3f);
+            Check("v11-direction-move-left", guide.CurrentCorrection == VRGuidance.Correction.MoveLeft && menu.feedbackText.text == VRTrainingText.MoveLeft,
+                $"part 10 cm right of the seat -> {guide.CurrentCorrection}, shown {barrelSocket.LastDistance * 100f:0.0} cm away");
+            yield return CarryTo(R, barrel, () => new Pose(barrelSocket.transform.position + view.up * 0.10f, barrelSocket.transform.rotation), 0.3f);
+            Check("v11-direction-move-down", guide.CurrentCorrection == VRGuidance.Correction.MoveDown, guide.CurrentCorrection.ToString());
+            yield return CarryTo(R, barrel, () => new Pose(barrelSocket.transform.position, Quaternion.AngleAxis(30f, view.forward) * barrelSocket.transform.rotation), 0.3f);
+            Check("v11-direction-rotate-clockwise", guide.CurrentCorrection == VRGuidance.Correction.RotateClockwise && guide.RotationArcVisible && !barrelSocket.IsFilled,
+                $"turned 30 deg counter-clockwise (as seen) -> {guide.CurrentCorrection}, shown {barrelSocket.LastAngle:0.0} deg off");
+            yield return CarryTo(R, barrel, () => new Pose(barrelSocket.transform.position, Quaternion.AngleAxis(30f, view.up) * barrelSocket.transform.rotation), 0.3f);
+            Check("v11-direction-turn-left", guide.CurrentCorrection == VRGuidance.Correction.TurnLeft && !barrelSocket.IsFilled,
+                $"front turned 30 deg right -> {guide.CurrentCorrection}");
+            yield return ReleaseAt(R, rightRest);
+            yield return Hold(0.5f);
+            Check("v11-no-accidental-seat", !barrelSocket.IsFilled && mgr.CurrentStepIndex == 0 && mgr.MistakeCount == 2, $"mistakes={mgr.MistakeCount}");
 
             // Repeated grab / release must not break the state.
             for (int i = 0; i < 3; i++)
@@ -411,7 +488,7 @@ namespace VRArmory.Tests
             Check("single-part-not-stolen", barrelGrab.interactorsSelecting.Count == 1 && IsHeldBy(barrelGrab, right),
                 $"holders={barrelGrab.interactorsSelecting.Count}");
             L.grip = false; R.grip = false;
-            L.pos = stand + new Vector3(-0.25f, 1.1f, 0.3f);
+            L.pos = leftRest;
             yield return Hold(0.6f);
 
             // ---- Two-handed slide: no jump when the second hand joins or either hand leaves
@@ -424,11 +501,6 @@ namespace VRArmory.Tests
             yield return Frames(3);
             R.grip = true;
             yield return Hold(0.4f);
-            XRDirectInteractor rDirect = FindController("Right Controller").GetComponentInChildren<XRDirectInteractor>();
-            var rTargets = new List<IXRInteractable>();
-            rDirect.GetValidTargets(rTargets);
-            Info("right-direct-state", $"active={rDirect.isActiveAndEnabled} selectActive={rDirect.isSelectActive} targets=[{string.Join(",", rTargets.ConvertAll(t => t.transform.name))}]"
-                + $" selecting=[{string.Join(",", rDirect.interactablesSelected.ConvertAll(t => t.transform.name))}] handPos={rDirect.transform.position} slideBounds={slide.Colliders[0].bounds}");
             float jumpJoin = Vector3.Distance(p0, slide.transform.position), turnJoin = Quaternion.Angle(r0, slide.transform.rotation);
             Check("two-handed-grab", slideGrab.interactorsSelecting.Count == 2, $"holders={slideGrab.interactorsSelecting.Count}");
             Check("two-handed-no-jump-on-join", jumpJoin < 0.01f && turnJoin < 3f, $"moved {jumpJoin * 1000f:0.0} mm, turned {turnJoin:0.0} deg");
@@ -438,6 +510,8 @@ namespace VRArmory.Tests
             float jumpLeave = Vector3.Distance(p0, slide.transform.position), turnLeave = Quaternion.Angle(r0, slide.transform.rotation);
             Check("release-one-hand-keeps-holding", slideGrab.interactorsSelecting.Count == 1 && slide.IsHeld, $"holders={slideGrab.interactorsSelecting.Count}");
             Check("two-handed-no-jump-on-release", jumpLeave < 0.01f && turnLeave < 3f, $"moved {jumpLeave * 1000f:0.0} mm, turned {turnLeave:0.0} deg");
+            Check("v11-host-held-guidance", guide.HostHeld == slide && guide.HighlightedPart == P(GunPart.Barrel)
+                                            && menu.detailText.text == VRTrainingText.HostHeldDetail(GunPart.UpperSlide), menu.detailText.text);
 
             // ---- Step 1 while the slide is held in the air: barrel seated by the other hand
             L.grip = false;
@@ -447,30 +521,65 @@ namespace VRArmory.Tests
             Check("vr-step1-seated-into-held-slide", S("Socket_Barrel").IsFilled && P(GunPart.Barrel).transform.parent == slide.transform && mgr.CurrentStepIndex == 1,
                 $"step={mgr.CurrentStepIndex}");
             Check("vr-step-complete-message", hud.DirectiveText.Contains("COMPLETE"), hud.DirectiveText);
+            Check("v11-seat-success-on-panel", menu.ShownFeedback == VRTrainingMenu.Feedback.Success && menu.feedbackText.text == VRTrainingText.Seated(GunPart.Barrel),
+                menu.feedbackText.text);
             R.grip = false;   // put the slide back
             yield return Hold(0.6f);
             Check("held-slide-returned-with-barrel", !slide.IsHeld && P(GunPart.Barrel).transform.parent == slide.transform);
+            Check("v11-step2-spring-highlighted", guide.HighlightedPart == spring, guide.HighlightedPart?.name);
 
-            // ---- Steps 2-4
-            yield return GrabAndRelease(R, P(GunPart.RecoilSpring), S("Socket_RecoilSpring"), Quaternion.identity, true);
+            // ---- Step 2, v1.1: brought near the seat with the grip still held, it is guided in and clicks in by itself
+            SnapSocket springSocket = S("Socket_RecoilSpring");
+            yield return GrabAt(R, spring);
+            yield return Hold(0.3f);
+            float shownMin = float.MaxValue;
+            yield return CarryTo(R, spring, () => new Pose(springSocket.transform.position + view.right * 0.04f, Quaternion.AngleAxis(12f, view.up) * springSocket.transform.rotation),
+                1.2f, () => { if (!springSocket.IsFilled && spring.IsHeld) shownMin = Mathf.Min(shownMin, springSocket.LastDistance); });
+            Check("v11-assist-pulls-toward-seat", shownMin < 0.03f, $"hand 40 mm off the seat, part shown {shownMin * 1000f:0.0} mm off");
+            Check("v11-auto-seat-without-release", springSocket.IsFilled && !spring.IsHeld && R.grip, $"filled={springSocket.IsFilled} held={spring.IsHeld}");
+            R.grip = false;
             yield return Hold(0.5f);
             Check("vr-step2-seated", S("Socket_RecoilSpring").IsFilled && mgr.CurrentStepIndex == 2);
-            yield return GrabAndRelease(L, slide, S("Socket_Slide"), Quaternion.identity, true);
+            Check("v11-step3-slide-highlighted", guide.HighlightedPart == slide, guide.HighlightedPart?.name);
+
+            // ---- Step 3, v1.1: two-handed slide guided onto the frame; both hands are let go when it clicks in
+            yield return GrabAt(L, slide);
+            R.pos = slide.Colliders[0].bounds.center + Vector3.forward * 0.02f; R.rot = L.rot; R.grip = false;
+            yield return Frames(3);
+            R.grip = true;
+            yield return Hold(0.4f);
+            int holders = slideGrab.interactorsSelecting.Count;
+            yield return CarryBothTo(slide, () => SeatPose(S("Socket_Slide")), 1.2f);
+            Check("v11-two-handed-assisted-seat", holders == 2 && S("Socket_Slide").IsFilled && slideGrab.interactorsSelecting.Count == 0,
+                $"holders before={holders}, filled={S("Socket_Slide").IsFilled}, holders after={slideGrab.interactorsSelecting.Count}");
+            L.grip = false; R.grip = false;
+            L.pos = leftRest; R.pos = rightRest;
             yield return Hold(0.5f);
             Check("vr-step3-seated", S("Socket_Slide").IsFilled && slide.transform.parent == P(GunPart.LowerFrame).transform && mgr.CurrentStepIndex == 3);
+            Check("v11-step4-magazine-highlighted", guide.HighlightedPart == mag, guide.HighlightedPart?.name);
+
             yield return GrabAndRelease(R, P(GunPart.Magazine), S("Socket_Magazine"), Quaternion.identity, true);
             yield return Hold(2.0f);
             Check("vr-step4-seated-function-check-begins", S("Socket_Magazine").IsFilled && mgr.CurrentStepIndex == 4 && fc.IsRunning, $"step={mgr.CurrentStepIndex} running={fc.IsRunning}");
             Check("vr-fc-directive-uses-vr-controls", hud.DirectiveText.Contains("A / X"), hud.DirectiveText);
+            Check("v11-assembly-complete-celebration", menu.headlineText.text == VRTrainingText.AssemblyComplete, menu.headlineText.text);
+            yield return Hold(2.0f);
+            AssemblyPart frame = P(GunPart.LowerFrame);
+            Check("v11-fc-pick-up-pistol", guide.CurrentPhase == VRGuidance.Phase.PickUpPistol && guide.HighlightedPart == frame
+                                           && menu.headlineText.text == VRTrainingText.PickUpPistol, $"phase={guide.CurrentPhase} headline='{menu.headlineText.text}'");
 
             // ---- Function check with controllers
-            AssemblyPart frame = P(GunPart.LowerFrame);
             yield return GrabAt(R, frame);
             yield return LiftTo(R, frame, origin.transform.position + new Vector3(0.05f, 1.15f, 0.45f));
             Check("pistol-held", frame.IsHeld);
+            Transform rightCtrl = FindController("Right Controller").transform;
+            Check("v11-fc-tooltip-on-pistol-hand", guide.TooltipText == VRTrainingText.PressButton("A") && Vector3.Distance(guide.TooltipTransform.position, rightCtrl.position) < 0.15f
+                                                  && menu.headlineText.text == VRTrainingText.StageTitle(0),
+                $"tooltip='{guide.TooltipText}' {Vector3.Distance(guide.TooltipTransform.position, rightCtrl.position) * 100f:0} cm from the right controller, headline='{menu.headlineText.text}'");
             R.primary = true; yield return Frames(2); R.primary = false; yield return Frames(2);
             Check("fc1-safety-on-with-A", fc.SafetyOn && Check5() == "SafeTrigger", Check5());
             R.triggerValue = 1f; yield return Hold(0.2f);
+            Check("v11-fc-release-prompt", menu.headlineText.text == VRTrainingText.ReleaseTrigger && guide.TooltipText == VRTrainingText.LetGo, menu.headlineText.text);
             R.triggerValue = 0f; yield return Hold(0.2f);
             Check("fc2-safe-trigger", Check5() == "SafeOff", Check5());
             R.primary = true; yield return Frames(2); R.primary = false; yield return Frames(2);
@@ -481,6 +590,7 @@ namespace VRArmory.Tests
             float hammerTravel = Quaternion.Angle(hammerRest, hammerT.localRotation);
             R.triggerValue = 1f; yield return Hold(0.2f);
             Check("fc4-double-action", Check5() == "RackHeld", $"{Check5()}, hammer drew back {hammerTravel:0.0} deg at 60% pull");
+            Check("v11-fc-rack-hint", guide.RackHintVisible && menu.headlineText.text == VRTrainingText.StageTitle(4), menu.headlineText.text);
 
             // Rack: the left hand grips the rear of the slide and pulls back while the trigger stays held.
             Transform grip = frame.transform.Find("VR_Slide_Rack_Grip");
@@ -504,30 +614,96 @@ namespace VRArmory.Tests
             Check("fc6-trigger-reset", Check5() == "SingleAction", Check5());
             R.triggerValue = 1f; yield return Hold(0.2f);
             Check("fc7-single-action-passed", fc.Passed && Check5() == "Done", Check5());
+            Check("v11-fc-passed-on-panel", menu.headlineText.text == VRTrainingText.CheckPassed, menu.headlineText.text);
             R.triggerValue = 0f; R.grip = false;
             yield return Hold(2.0f);
             Check("mistakes-count-only-real-attempts", mgr.MistakeCount == 2, $"mistakes={mgr.MistakeCount} (2 deliberate: out of sequence + misaligned)");
             Check("completion-screen", mgr.IsComplete && menu.completePanel.activeSelf && menu.resultText.text.Contains("TIME"), menu.resultText.text.Replace("\n", " / "));
             Check("hud-final-message", hud.DirectiveText.StartsWith("ALL STEPS COMPLETE"), hud.DirectiveText);
 
-            // ---- Restart from the completion screen
-            Button again = menu.restartButtons[1];
-            yield return PressButton(R, again);
+            // ---- v1.1: back to the modules without a reload, coming soon, back, then train again
+            GunAssemblyManager before = mgr;
+            yield return PressButton(R, menu.modulesButton);
+            Check("v11-back-to-modules-without-reload", menu.modulesPanel.activeSelf && FindObjectOfType<GunAssemblyManager>() == before && before.IsComplete
+                                                        && menu.assemblyModuleStatus.text == VRTrainingText.StatusCompleted, menu.assemblyModuleStatus.text);
+            yield return PressButton(R, menu.shootingModuleButton);
+            Check("v11-coming-soon-after-training", menu.comingSoonPanel.activeSelf);
+            yield return PressButton(R, menu.comingSoonBackButton);
+            Check("v11-back-again", menu.modulesPanel.activeSelf);
+
+            // ---- Restart: selecting the finished module trains again from a fresh bench (scene reload)
+            yield return PressButton(R, menu.assemblyModuleButton);
             yield return Hold(0.3f);
             FindScene();
             origin = FindObjectOfType<XROrigin>();
             menu = FindObjectOfType<VRTrainingMenu>();
-            Check("restart-reloads-clean", menu != null && menu.introPanel.activeSelf && !mgr.HasStarted && AssemblyPart.HeldParts.Count == 0
-                                          && SnapSocket.All.Count == 4 && FindObjectsOfType<XRInteractionManager>().Length == 1,
-                $"held={AssemblyPart.HeldParts.Count} sockets={SnapSocket.All.Count}");
-            yield return PressButton(R, menu.startButton);
+            guide = FindObjectOfType<VRGuidance>();
+            // v1.1: "train again" goes straight to step 1 (was: back to the intro screen).
+            Check("restart-reloads-clean", menu != null && menu.progressPanel.activeSelf && mgr.HasStarted && mgr.CurrentStepIndex == 0 && !mgr.IsComplete
+                                          && AssemblyPart.HeldParts.Count == 0 && SnapSocket.All.Count == 4 && FindObjectsOfType<XRInteractionManager>().Length == 1
+                                          && FindObjectsOfType<EventSystem>().Length == 1 && guide.HighlightedPart == P(GunPart.Barrel),
+                $"held={AssemblyPart.HeldParts.Count} sockets={SnapSocket.All.Count} started={mgr.HasStarted}");
             yield return GrabAndRelease(L, P(GunPart.Barrel), S("Socket_Barrel"), Quaternion.identity, true);
             yield return Hold(0.5f);
             Check("vr-assembly-after-restart", S("Socket_Barrel").IsFilled && mgr.CurrentStepIndex == 1, $"step={mgr.CurrentStepIndex}");
 
+            // ---- v1.1: Restart button on the training screen
+            yield return PressButton(R, menu.restartButton);
+            yield return Hold(0.3f);
+            FindScene();
+            origin = FindObjectOfType<XROrigin>();
+            menu = FindObjectOfType<VRTrainingMenu>();
+            Check("v11-restart-from-training", menu.progressPanel.activeSelf && mgr.HasStarted && mgr.CurrentStepIndex == 0 && !S("Socket_Barrel").IsFilled,
+                $"step={mgr.CurrentStepIndex}");
+
             InputSystem.RemoveDevice(left);
             InputSystem.RemoveDevice(right);
             InputSystem.RemoveDevice(hmd);
+        }
+
+        VRGuidance guide;
+
+        static Pose SeatPose(SnapSocket s) => new Pose(s.transform.position, s.transform.rotation);
+
+        // Carries a held part so that it would land on 'target' (the hand keeps its grab offset), for 'seconds'.
+        // The offset is measured now, while the part is away from its seat, so the placement assist is not involved.
+        IEnumerator CarryTo(Hand h, AssemblyPart part, Func<Pose> target, float seconds, Action eachFrame = null)
+        {
+            Vector3 handInPart = part.transform.InverseTransformPoint(h.pos);
+            Quaternion handRotInPart = Quaternion.Inverse(part.transform.rotation) * h.rot;
+            for (float t = 0f; t < seconds; t += Time.deltaTime)
+            {
+                Pose p = target();
+                h.pos = Matrix4x4.TRS(p.position, p.rotation, part.transform.lossyScale).MultiplyPoint3x4(handInPart);
+                h.rot = p.rotation * handRotInPart;
+                yield return Frames(1);
+                eachFrame?.Invoke();
+            }
+        }
+
+        // Same with both hands on a two-handed part.
+        IEnumerator CarryBothTo(AssemblyPart part, Func<Pose> target, float seconds)
+        {
+            Vector3 lIn = part.transform.InverseTransformPoint(L.pos), rIn = part.transform.InverseTransformPoint(R.pos);
+            Quaternion lRot = Quaternion.Inverse(part.transform.rotation) * L.rot, rRot = Quaternion.Inverse(part.transform.rotation) * R.rot;
+            for (float t = 0f; t < seconds; t += Time.deltaTime)
+            {
+                Pose p = target();
+                Matrix4x4 m = Matrix4x4.TRS(p.position, p.rotation, part.transform.lossyScale);
+                L.pos = m.MultiplyPoint3x4(lIn); L.rot = p.rotation * lRot;
+                R.pos = m.MultiplyPoint3x4(rIn); R.rot = p.rotation * rRot;
+                yield return Frames(1);
+            }
+        }
+
+        // Moves the hand away from every socket before letting go, so the release is not a seating attempt.
+        IEnumerator ReleaseAt(Hand h, Vector3 restPos)
+        {
+            h.pos = restPos;
+            h.rot = Quaternion.identity;
+            yield return Frames(4);
+            h.grip = false;
+            yield return Frames(2);
         }
 
         ActionBasedController FindController(string n)
@@ -607,7 +783,7 @@ namespace VRArmory.Tests
             ray.TryGetCurrentRaycast(out RaycastHit? hit3d, out int _, out RaycastResult? uiHit, out int _, out bool isUI);
             Info("ray-on-" + button.name, (hit ? result.gameObject.name : "no UI hit")
                 + $" | rayActive={ray.isActiveAndEnabled} ui={ray.enableUIInteraction} originPos={ro.position} fwd={ro.forward}"
-                + $" angleToTarget={Vector3.Angle(ro.forward, target - ro.position):0.0} 3d={(hit3d.HasValue ? hit3d.Value.collider.name : "-")}"
+                + $" angleToTarget={Vector3.Angle(ro.forward, target - ro.position):0.0} 3d={(hit3d.HasValue && hit3d.Value.collider != null ? hit3d.Value.collider.name : "-")}"
                 + $" ui2={(uiHit.HasValue && uiHit.Value.gameObject != null ? uiHit.Value.gameObject.name : "-")} es={EventSystem.current?.name}");
             bool clicked = false;
             UnityEngine.Events.UnityAction onClick = () => clicked = true;
