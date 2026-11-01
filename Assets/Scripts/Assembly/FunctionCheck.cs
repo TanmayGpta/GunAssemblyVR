@@ -28,8 +28,14 @@ namespace VRArmory
 
         public event Action Completed;
         public event Action HammerFell;
+        // Short event messages ("RESET", "DOUBLE ACTION - HAMMER FELL", ...) as they are shown on the HUD.
+        public event Action<string> Notified;
         public bool IsRunning { get; private set; }
         public bool Passed { get; private set; }
+        // Current check, 0..6 (StageCount once passed), so other UIs can explain it.
+        public int Stage => (int)check;
+        public const int StageCount = 7;
+        public bool SafeTriggerPulled => safeTriggerPulled;
         public bool SafetyOn => safetyOn;
         public float TriggerPull => triggerPull;
         public float SlideAmount => slideAmount;
@@ -351,6 +357,7 @@ namespace VRArmory
         {
             lastEventTimer = 1.6f;
             Say(text);
+            Notified?.Invoke(text);
         }
 
         private void Say(string evt)

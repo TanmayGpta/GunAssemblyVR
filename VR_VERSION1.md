@@ -11,6 +11,22 @@ The same scene, assembly sequence, sockets, HUD and function check run in both m
 `VR_Version1/VRPlatformSwitch` decides at startup. Everything VR lives under `VR_Version1/VR_Content`,
 which is **saved inactive**, so desktop mode never touches it.
 
+## Version 1.1 – guided VR experience
+
+Version 1.1 (branch `feature/vr-version1-1-ux`) keeps all of the above and changes only what the VR trainee sees and feels.
+Desktop mode is unchanged.
+
+| Area | What changed |
+|---|---|
+| One panel | `VR_Training_Menu` is now the single panel, straight ahead behind the bench. In VR the desktop `Tactical_HUD_Canvas` is not drawn (its `Canvas` is disabled at runtime; `AssemblyHUD` still runs). The old left-hand panel is gone. |
+| Screens | Modules (01 Gun Assembly / 02 Shooting Training – Coming Soon) → Briefing (controls) → Training (step, progress bar, one instruction, one feedback line) → Complete (time, mistakes, Train again / Back to modules). |
+| Guidance (`VRGuidance`) | The next part pulses and has a floating marker; once picked up, a line leads to the glowing outline; direction hints ("Move it to the left", "Turn it clockwise", …) come from the real position / rotation error in the trainee's view; a curved arrow shows rotation. Function check: marker on the pistol, tooltip beside the hand holding it ("Press A", "Pull trigger"), arrow on the slide for racking. |
+| Placement assist (`VRPlacementAssist`) | XRI grab transformer added at runtime to each part. Within 15 cm of the part's own **unlocked** socket the part is pulled smoothly toward the seat (rotation only when already within 45°). When `SnapSocket` reports Valid (unchanged 6 cm / 20°) for 0.25 s, the hands let go and the normal release path seats the part. Wrong / out-of-sequence parts are never pulled. |
+| Feedback | Seat: chime + panel "Barrel in place!" + green ring. Rejection: plain-language reason on the panel. Misaligned correct part: calm teal ghost instead of amber (VR only). |
+| Text | Every sentence the trainee reads is in `VRTrainingText`. |
+
+Small additive API changes (desktop behaviour unchanged): `AssemblyPart.SetHighlight(float)`, `SnapSocket.amberWhenMisaligned` / `faintAlphaBoost` / `showInsertionPath`, `FunctionCheck.Stage` / `SafeTriggerPulled` / `Notified`, `ProceduralAudio.MakeChime`.
+
 ## Technical configuration
 
 | Item | Value |
@@ -33,7 +49,8 @@ VR_Version1                      VRPlatformSwitch (desktop or VR)
     ├── XR Interaction Setup     XRI Starter Assets prefab: XR Interaction Manager, EventSystem + XRUIInputModule, XR Origin
     ├── Teleport_Floor           invisible TeleportationArea over the armory floor
     ├── Bench_Teleport_Anchor    green disc: teleport here to stand at the bench
-    ├── VR_Training_Menu         world-space panel left of the bench (intro / progress / completion)
+    ├── VR_Training_Menu         the one world-space panel in front of the bench (modules / briefing / training / complete)
+    ├── VR_Guidance              in-world hints + adds VRPlacementAssist to the parts at runtime (v1.1)
     ├── VR_Function_Check_Controls
     └── Quest_Performance        turns off shadows on all lights except the bench lamp and sun (VR only)
 ```
@@ -50,7 +67,10 @@ New (`Assets/Scripts/VR/`):
 | `VRPlatformSwitch` | Desktop or VR at startup; enables the part grabs in VR |
 | `VRAssemblyGrab` | `XRGrabInteractable` for one part. Calls `AssemblyPart.BeginGrab` / `EndGrab`, so all validation stays in `SnapSocket`. Blocks grabbing seated or returning parts, allows a second hand only on the frame and slide, adds highlight and vibration |
 | `VRFunctionCheckControls` | Step 05 in VR: index trigger → `SetTrigger`, A/X → `SetSafety`, other hand pulls the slide grip → `SetSlide` |
-| `VRTrainingMenu` | Intro screen, timer / mistakes / tips, completion screen, Restart (scene reload) and Exit |
+| `VRTrainingMenu` | The one VR panel: module selection, Coming Soon, briefing, training instructions, completion. Restart / Train again = scene reload; Back to modules does not reload |
+| `VRGuidance` (1.1) | Highlight, marker, target line, direction / rotation hints, function-check tooltips, success rings |
+| `VRPlacementAssist` (1.1) | Magnetic pull near the active socket + click-in when Valid (validation stays in `SnapSocket`) |
+| `VRTrainingText` (1.1) | All trainee-facing sentences |
 | `QuestPerformanceSettings` | Shadow budget for Quest |
 
 New (`Assets/Scripts/Assembly/`): `AssemblyFeedbackAudio`, `ProceduralAudio` (synthesized sounds, moved out of `FunctionCheck`).
@@ -70,7 +90,7 @@ Changed teammate scripts (small, behaviour-preserving):
 
 1. **Configure Project for Quest 3S** – all settings in the table above. Safe to re-run.
 2. **Setup VR Scene (additive)** – creates or updates `VR_Version1`. Safe to re-run.
-3. **Build Quest APK** – `Builds/Android/GunAssemblyVR_v1.apk`.
+3. **Build Quest APK** – `Builds/Android/GunAssemblyVR_v1_1.apk`.
 - **Run Self-Test (Desktop Mode)** / **(VR Rig, Simulated Controllers)** – automated Play Mode tests; results in the Console as `SELFTEST|...` lines.
 
 Order of the older builders on a fresh scene (each now asks first):
@@ -82,7 +102,7 @@ Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire 
 | Control | Action |
 |---|---|
 | Grip (middle finger) | Pick up / hold a part. Either hand |
-| Release grip at the green ghost | Seat the part |
+| Bring the part to the glowing outline | It is guided in and clicks into place (or release grip when it turns green) |
 | Both grips on frame or slide | Two-handed hold |
 | Thumbstick forward, release | Teleport (aim at the floor or the green bench disc) |
 | Thumbstick left / right | Snap turn |
@@ -98,6 +118,8 @@ Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire 
 - **A new grabbable part:** add `AssemblyPart`, `XRGeneralGrabTransformer` (scaling off) and `VRAssemblyGrab` (disabled), then add it to `VRPlatformSwitch.partGrabs`. Easiest: re-run *Setup VR Scene*, which does this for every `AssemblyPart`.
 - **A new step:** add it to `Gun_Assembly_Manager.steps` (socket or action step); the HUD, the VR menu progress and the sounds pick it up automatically.
 - **Shooting range (Phase 05+):** a VR pistol can reuse `VRFunctionCheckControls`' trigger reading; `RangeTarget.RegisterHit` is ready to be called.
+  The module card already exists (`VRTrainingMenu.shootingModuleButton`, currently opening the Coming Soon screen).
+- **New trainee text:** add it to `VRTrainingText`, not inline in a script.
 - **Scene merges:** `SampleScene.unity` is one file; agree who edits it, or put new modules in prefabs or additive scenes.
 - Run both self-tests before committing; they must end with `summary|PASS`.
 
@@ -106,4 +128,5 @@ Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire 
 - Tested automatically in the Editor with simulated controllers. Real-headset feel (grab comfort, readability, frame rate) still needs testing on the Quest 3S.
 - Hand tracking is not included (controllers only).
 - Ray grabs pull the part to the hand (XRI "force grab"); a two-handed grab is done with near grabs.
-- The shooting range is still scenery only (as in the prototype).
+- The shooting range is still scenery only (as in the prototype); in VR it is announced as "Coming Soon".
+- Version 1.1 UX (guidance, assist, module menu) is VR-only; the desktop prototype keeps its original HUD.
