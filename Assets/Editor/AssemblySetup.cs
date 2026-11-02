@@ -284,6 +284,7 @@ namespace VRArmory.Editor
                 rb.isKinematic = true;
             }
 
+            GunModelFix.Apply(); // Re-Stage only collapses the exploded FBX approximately; this seats the pieces properly.
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(station.scene);
             Debug.Log($"[VR Armory] Re-staged {modules.Count} parts at {PartWorldScale:0.##}x real scale, mat {matBounds.size.x:0.00} x {matBounds.size.z:0.00} m, parts {totalWidth:0.00} m wide, gap {gap * 100f:0.0} cm, yaw {yaw.eulerAngles.y:0}.");
             DiagnosePicking(modules);
@@ -408,7 +409,7 @@ namespace VRArmory.Editor
             t.localScale = m.lossyScale;
         }
 
-        private static Bounds WorldBounds(Transform root)
+        internal static Bounds WorldBounds(Transform root)
         {
             Renderer[] rs = root.GetComponentsInChildren<Renderer>();
             Bounds b = rs[0].bounds;
@@ -417,7 +418,7 @@ namespace VRArmory.Editor
         }
 
         // BoxCollider on the module root from all 8 corners of every child mesh (rotation-safe).
-        private static void FitCollider(Transform m)
+        internal static void FitCollider(Transform m)
         {
             bool first = true;
             Bounds local = new Bounds();

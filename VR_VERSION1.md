@@ -97,6 +97,8 @@ Order of the older builders on a fresh scene (each now asks first):
 Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire Range → Setup Phase 02 Assembly → Re-Stage Gun Parts → VR / Setup VR Scene.
 **On the current scene none of them needs to be run.**
 
+**Fix Gun Model (static filler)** seats the FBX pieces properly and adds `Static_Detail` blocks (no collider, no function) inside the frame and slide. Re-Stage runs it automatically.
+
 ## VR controls
 
 | Control | Action |
@@ -104,8 +106,8 @@ Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire 
 | Grip (middle finger) | Pick up / hold a part. Either hand |
 | Bring the part to the glowing outline | It is guided in and clicks into place (or release grip when it turns green) |
 | Both grips on frame or slide | Two-handed hold |
-| Thumbstick forward, release | Teleport (aim at the floor or the green bench disc) |
-| Thumbstick left / right | Snap turn |
+| Left thumbstick | Walk (direction follows the head, 1.6 m/s) |
+| Right thumbstick left / right | Smooth turn (75 deg/s) |
 | Index trigger at a button | Press UI |
 | Function check: index trigger (hand holding the pistol) | Squeeze the trigger (analog) |
 | Function check: A / X (same hand) | Safety on / off |
@@ -128,5 +130,6 @@ Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire 
 - Tested automatically in the Editor with simulated controllers. Real-headset feel (grab comfort, readability, frame rate) still needs testing on the Quest 3S.
 - Hand tracking is not included (controllers only).
 - Ray grabs pull the part to the hand (XRI "force grab"); a two-handed grab is done with near grabs.
-- The shooting range is still scenery only (as in the prototype); in VR it is announced as "Coming Soon".
+- The shooting range has moving targets (`RangeTargetMover`, both modes) but no weapon yet; in VR it is announced as "Coming Soon".
+- Walking and turning pause while that hand holds a part with its ray (Starter Assets behaviour). Near grabs are not affected.
 - Version 1.1 UX (guidance, assist, module menu) is VR-only; the desktop prototype keeps its original HUD.

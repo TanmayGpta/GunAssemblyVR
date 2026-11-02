@@ -22,9 +22,9 @@ namespace VRArmory.Editor
         const string RootName = "VR_Version1";
         const string ContentName = "VR_Content";
         const string SetupPrefabPath = "Assets/Samples/XR Interaction Toolkit/2.6.4/Starter Assets/Prefabs/XR Interaction Setup.prefab";
-        const string MarkerMaterialPath = "Assets/Materials/VR/VR_Teleport_Marker.mat";
         const string GuideMaterialPath = "Assets/Materials/VR/VR_Guide_Line.mat";
-        const int TeleportLayer = 31; // the Starter Assets teleport interactor uses interaction layer 31
+        const float WalkSpeed = 1.6f;  // m/s, normal walking pace
+        const float TurnSpeed = 75f;   // deg/s
 
         // Where the desktop player stands: in front of the bench, facing downrange (+Z).
         static readonly Vector3 BenchStandPoint = new Vector3(0f, 0f, -0.95f);
@@ -91,15 +91,31 @@ namespace VRArmory.Editor
             originSo.FindProperty("m_RequestedTrackingOriginMode").intValue = (int)XROrigin.TrackingOriginMode.Floor; // real standing height
             originSo.ApplyModifiedProperties();
 
-            // Comfort: teleport + snap turn only (no smooth stick walking).
+            // Locomotion: left stick walks, right stick turns smoothly. No teleport or snap turn on either hand.
             // (Set through SerializedObject: the C# properties also enable input actions, which must not happen in edit mode.)
             foreach (ActionBasedControllerManager cm in setupT.GetComponentsInChildren<ActionBasedControllerManager>(true))
             {
+                bool left = cm.name.Contains("Left");
                 var so = new SerializedObject(cm);
-                so.FindProperty("m_SmoothMotionEnabled").boolValue = false;
-                so.FindProperty("m_SmoothTurnEnabled").boolValue = false;
+                so.FindProperty("m_SmoothMotionEnabled").boolValue = left;
+                so.FindProperty("m_SmoothTurnEnabled").boolValue = !left;
+                so.FindProperty("m_TeleportModeActivate").objectReferenceValue = null;
+                so.FindProperty("m_TeleportModeCancel").objectReferenceValue = null;
                 so.ApplyModifiedProperties();
             }
+            foreach (DynamicMoveProvider move in setupT.GetComponentsInChildren<DynamicMoveProvider>(true))
+            {
+                var so = new SerializedObject(move);
+                so.FindProperty("m_MoveSpeed").floatValue = WalkSpeed;
+                so.ApplyModifiedProperties();
+            }
+            foreach (ActionBasedContinuousTurnProvider turn in setupT.GetComponentsInChildren<ActionBasedContinuousTurnProvider>(true))
+            {
+                var so = new SerializedObject(turn);
+                so.FindProperty("m_TurnSpeed").floatValue = TurnSpeed;
+                so.ApplyModifiedProperties();
+            }
+            GetOrAdd<VRLocomotionCollision>(FindOrCreate(content, "VR_Locomotion_Collision")).body = origin.GetComponent<CharacterController>();
             ActionBasedController leftController = FindController(origin, "Left Controller");
             ActionBasedController rightController = FindController(origin, "Right Controller");
             Camera xrCamera = origin.Camera;
@@ -114,9 +130,15 @@ namespace VRArmory.Editor
                 if (part.partType == GunPart.LowerFrame) frameGrab = grab;
             }
 
-            // --- Locomotion targets ---
-            BuildTeleportFloor(content);
-            BuildBenchAnchor(content);
+            // Teleport objects from earlier versions.
+            foreach (string oldName in new[] { "Teleport_Floor", "Bench_Teleport_Anchor" })
+            {
+                Transform old = content.Find(oldName);
+                if (old != null) Object.DestroyImmediate(old.gameObject);
+            }
+
+            // --- Shared (desktop + VR): moving range targets ---
+            BuildMovingTargets();
 
             // --- VR-only behaviour ---
             VRFunctionCheckControls fcControls = GetOrAdd<VRFunctionCheckControls>(FindOrCreate(content, "VR_Function_Check_Controls"));
@@ -153,7 +175,7 @@ namespace VRArmory.Editor
 
             foreach (Object o in new Object[] { menu, guidance, fcControls, perf, audio, platformSwitch }) EditorUtility.SetDirty(o);
             content.gameObject.SetActive(false); // desktop mode never sees the VR objects
-            Debug.Log($"[VR Armory] VR scene setup done: {grabs.Count} grabbable parts, XR rig at {BenchStandPoint}, training panel, guidance, teleport, function-check controls.");
+            Debug.Log($"[VR Armory] VR scene setup done: {grabs.Count} grabbable parts, XR rig at {BenchStandPoint}, training panel, guidance, smooth locomotion, moving targets, function-check controls.");
             return true;
         }
 
@@ -183,57 +205,19 @@ namespace VRArmory.Editor
             return grab;
         }
 
-        static void BuildTeleportFloor(Transform content)
+        // Each dummy sweeps across the range at its own pace; farther dummies travel wider.
+        static void BuildMovingTargets()
         {
-            // Invisible collider just above Room_Floor (10.3 x 11.3 m armory room, walls 0.3 m thick).
-            GameObject floor = FindOrCreate(content, "Teleport_Floor");
-            floor.transform.SetPositionAndRotation(new Vector3(0f, 0.005f, 2.5f), Quaternion.identity);
-            BoxCollider box = GetOrAdd<BoxCollider>(floor);
-            box.size = new Vector3(10.6f, 0.01f, 9.6f);
-            TeleportationArea area = GetOrAdd<TeleportationArea>(floor);
-            area.interactionLayers = 1 << TeleportLayer;
-            area.interactionManager = null;
-            EditorUtility.SetDirty(area);
-        }
-
-        static void BuildBenchAnchor(Transform content)
-        {
-            // Teleport here to stand exactly at the bench, facing it.
-            GameObject anchor = FindOrCreate(content, "Bench_Teleport_Anchor");
-            anchor.transform.SetPositionAndRotation(BenchStandPoint, Quaternion.identity);
-
-            Transform marker = anchor.transform.Find("Marker");
-            if (marker == null)
+            RangeTarget[] targets = Object.FindObjectsOfType<RangeTarget>(true);
+            System.Array.Sort(targets, (a, b) => a.distanceMeters.CompareTo(b.distanceMeters));
+            for (int i = 0; i < targets.Length; i++)
             {
-                marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder).transform;
-                marker.name = "Marker";
-                marker.SetParent(anchor.transform, false);
-                Object.DestroyImmediate(marker.GetComponent<Collider>());
-                marker.gameObject.AddComponent<BoxCollider>();
+                RangeTargetMover mover = GetOrAdd<RangeTargetMover>(targets[i].gameObject);
+                mover.amplitude = 1f + i * 0.75f;
+                mover.period = 6f + i * 1.5f;
+                mover.phase = i * 0.37f;
+                EditorUtility.SetDirty(mover);
             }
-            marker.localPosition = new Vector3(0f, 0.012f, 0f);
-            marker.localScale = new Vector3(0.6f, 0.01f, 0.6f);
-            MeshRenderer mr = marker.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = GetOrCreateMarkerMaterial();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-            TeleportationAnchor ta = GetOrAdd<TeleportationAnchor>(anchor);
-            ta.teleportAnchorTransform = anchor.transform;
-            ta.matchOrientation = MatchOrientation.TargetUpAndForward;
-            ta.interactionLayers = 1 << TeleportLayer;
-            EditorUtility.SetDirty(ta);
-        }
-
-        static Material GetOrCreateMarkerMaterial()
-        {
-            Material m = AssetDatabase.LoadAssetAtPath<Material>(MarkerMaterialPath);
-            if (m != null) return m;
-            if (!AssetDatabase.IsValidFolder("Assets/Materials/VR")) AssetDatabase.CreateFolder("Assets/Materials", "VR");
-            m = new Material(Shader.Find("Standard")) { color = new Color(0.0f, 0.45f, 0.25f) };
-            m.EnableKeyword("_EMISSION");
-            m.SetColor("_EmissionColor", new Color(0.0f, 0.35f, 0.2f));
-            AssetDatabase.CreateAsset(m, MarkerMaterialPath);
-            return m;
         }
 
         static Material GetOrCreateGuideMaterial()

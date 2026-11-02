@@ -359,6 +359,7 @@ namespace VRArmory.Tests
             // v1.1: the first screen is module selection (was: the briefing). The assembly is still locked until START.
             Check("vr-waits-for-start", !mgr.HasStarted && menu.modulesPanel.activeSelf && !menu.introPanel.activeSelf, "module selection shown, assembly locked");
             Check("fc-desktop-keys-off", !fc.desktopInput && fc.triggerControl.Contains("TRIGGER"));
+            Check("no-teleport-objects", GameObject.Find("Teleport_Floor") == null && GameObject.Find("Bench_Teleport_Anchor") == null);
             Check("all-part-grabs-enabled", Array.TrueForAll(FindObjectsOfType<VRAssemblyGrab>(true), g => g.enabled));
             int shadowLights = Array.FindAll(FindObjectsOfType<Light>(), l => l.shadows != LightShadows.None).Length;
             Check("quest-shadow-budget", shadowLights <= 2, $"shadow-casting lights in VR = {shadowLights}");
@@ -757,9 +758,10 @@ namespace VRArmory.Tests
             }
             if (expectAligned) Check($"aligned-{part.name}", socket.CurrentAlignment == SnapSocket.Alignment.Valid,
                 $"alignment={socket.CurrentAlignment} {socket.LastDistance * 1000f:0.0} mm {socket.LastAngle:0.0} deg");
+            // Let go first: turning the hand in the same frame could carry the part onto the seat rotation as it is released.
             h.grip = false;
-            h.rot = Quaternion.identity;
             yield return Frames(2);
+            h.rot = Quaternion.identity;
         }
 
         // Points the hand's ray at a UI button and clicks with the trigger.

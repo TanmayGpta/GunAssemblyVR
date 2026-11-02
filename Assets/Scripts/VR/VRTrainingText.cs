@@ -33,7 +33,7 @@ namespace VRArmory
         public const string TriggerChip = "TRIGGER";
         public const string TriggerUse = "Pull to press buttons";
         public const string StickChip = "THUMBSTICK";
-        public const string StickUse = "Push forward to move, left or right to turn";
+        public const string StickUse = "Left stick to walk, right stick to turn";
         public const string IntroHint = "Glowing parts and outlines always show you what to do next.";
         public const string StartTraining = "Start training";
 
