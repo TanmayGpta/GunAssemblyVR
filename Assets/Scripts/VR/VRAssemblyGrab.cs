@@ -69,6 +69,10 @@ namespace VRArmory
         public override bool IsSelectableBy(IXRSelectInteractor interactor)
         {
             if (!base.IsSelectableBy(interactor) || Part == null) return false;
+            // Tracked hands: the pistol is grabbed only through the hand's direct interactor (VRHandFistGrab picks it and
+            // holds it in the palm grip pose), so the hand ray only highlights it. A fingertip poke never picks a part up.
+            if (VRHands.Instance != null && VRHands.Instance.IsTrackedHand(interactor, out _)
+                && (interactor is XRPokeInteractor || (interactor is XRRayInteractor && wrapTrackedHand))) return false;
             if (IsSelected(interactor)) return true;                            // keep holding
             if (isSelected) return selectMode == InteractableSelectMode.Multiple; // second hand only on two-handed parts, never a "steal"
             return Part.IsGrabbable;                                             // not seated, not flying back to the bench

@@ -210,7 +210,18 @@ namespace VRArmory.Editor
             else handTeleport.teleportation.enabled = true;
             EditorUtility.SetDirty(handTeleport);
 
-            GetOrAdd<VRLocomotionCollision>(FindOrCreate(content, "VR_Locomotion_Collision")).body = origin.GetComponent<CharacterController>();
+            VRLocomotionCollision locomotionGuard = GetOrAdd<VRLocomotionCollision>(FindOrCreate(content, "VR_Locomotion_Collision"));
+            locomotionGuard.body = origin.GetComponent<CharacterController>();
+            // Left stick moves, right stick turns: those two actions are kept enabled while a part is held.
+            var keep = new List<UnityEngine.InputSystem.InputActionReference>();
+            foreach (ActionBasedControllerManager cm in setupT.GetComponentsInChildren<ActionBasedControllerManager>(true))
+            {
+                var so = new SerializedObject(cm);
+                var action = so.FindProperty(cm.name.Contains("Left") ? "m_Move" : "m_Turn").objectReferenceValue as UnityEngine.InputSystem.InputActionReference;
+                if (action != null) keep.Add(action);
+            }
+            locomotionGuard.keepEnabled = keep.ToArray();
+            EditorUtility.SetDirty(locomotionGuard);
             ActionBasedController leftController = FindController(origin, modality != null ? modality.leftController : null, "Left Controller");
             ActionBasedController rightController = FindController(origin, modality != null ? modality.rightController : null, "Right Controller");
             Camera xrCamera = origin.Camera;
@@ -733,7 +744,10 @@ namespace VRArmory.Editor
             BoxCollider box = GetOrAdd<BoxCollider>(volumeObject);
             box.isTrigger = true;
             box.center = local.center;
-            box.size = local.size * 1.1f;
+            // Generous, so the hand ray's pinch drift stays inside it: 1.6x the frame, at least 25 cm a side.
+            float minSide = 0.25f / frame.lossyScale.x;
+            Vector3 size = local.size * 1.6f;
+            box.size = new Vector3(Mathf.Max(size.x, minSide), Mathf.Max(size.y, minSide), Mathf.Max(size.z, minSide));
 
             XRInteractableSnapVolume volume = GetOrAdd<XRInteractableSnapVolume>(volumeObject);
             volume.interactionManager = manager;
