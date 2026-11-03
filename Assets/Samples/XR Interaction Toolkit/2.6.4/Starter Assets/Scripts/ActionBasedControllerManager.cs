@@ -277,14 +277,21 @@ namespace UnityEngine.XR.Interaction.Toolkit.Samples.StarterAssets
             }
         }
 
+        // VR Armory: held objects are pulled into the hand (force grab, no anchor control), so the thumbstick keeps
+        // walking/turning while something is held instead of being handed over to push/rotate the object.
+        [SerializeField]
+        bool m_KeepLocomotionWhileHolding;
+
         void OnRaySelectEntered(SelectEnterEventArgs args)
         {
+            if (m_KeepLocomotionWhileHolding) return;
             // Disable locomotion and turn actions
             DisableLocomotionActions();
         }
 
         void OnRaySelectExited(SelectExitEventArgs args)
         {
+            if (m_KeepLocomotionWhileHolding) return;
             // Re-enable the locomotion and turn actions
             UpdateLocomotionActions();
         }

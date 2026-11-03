@@ -961,6 +961,10 @@ namespace VRArmory.Tests
 
         ActionBasedController FindController(string n)
         {
+            // Hands rig: the modality manager knows which object is the controller (hand objects also carry an ActionBasedController).
+            var modality = origin.GetComponentInChildren<UnityEngine.XR.Interaction.Toolkit.Inputs.XRInputModalityManager>(true);
+            GameObject m = modality == null ? null : n.StartsWith("Left") ? modality.leftController : modality.rightController;
+            if (m != null && m.GetComponentInChildren<ActionBasedController>(true) is ActionBasedController fromModality) return fromModality;
             foreach (ActionBasedController c in origin.GetComponentsInChildren<ActionBasedController>()) if (c.name == n) return c;
             return null;
         }

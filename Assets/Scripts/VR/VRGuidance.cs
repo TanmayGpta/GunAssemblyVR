@@ -199,11 +199,12 @@ namespace VRArmory
                 else
                 {
                     CurrentPhase = Phase.FunctionCheck;
-                    Transform hand = frameGrab.interactorsSelecting[0].transform;
+                    IXRSelectInteractor holder = frameGrab.interactorsSelecting[0];
+                    Transform hand = holder.transform;
                     ActionBasedController left = functionCheckControls.leftController;
-                    ActionBasedController right = functionCheckControls.rightController;
-                    PistolInLeftHand = left != null && hand.IsChildOf(left.transform);
-                    Transform controller = PistolInLeftHand ? left.transform : right != null ? right.transform : hand;
+                    PistolInLeftHand = VRHands.Instance != null ? VRHands.Instance.IsLeft(holder) : left != null && hand.IsChildOf(left.transform);
+                    // The interactor holding the pistol: works for controllers and tracked hands alike.
+                    Transform controller = hand;
                     TooltipText = StageTooltip(functionCheck.Stage);
                     // Beside the hand, on its outer side, so it never covers the slide (where the rack hint goes).
                     Transform view = viewCamera.transform;
@@ -300,13 +301,15 @@ namespace VRArmory
             }
         }
 
+        private string SafetyHint => functionCheckControls.HandMode ? "Poke safety lever" : VRTrainingText.PressButton(SafetyButton);
+
         private string StageTooltip(int stage)
         {
             switch (stage)
             {
-                case 0: return VRTrainingText.PressButton(SafetyButton);
+                case 0: return SafetyHint;
                 case 1: return functionCheck.SafeTriggerPulled ? VRTrainingText.LetGo : VRTrainingText.PullTrigger;
-                case 2: return functionCheck.TriggerPull >= 0.2f ? VRTrainingText.LetGo : VRTrainingText.PressButton(SafetyButton);
+                case 2: return functionCheck.TriggerPull >= 0.2f ? VRTrainingText.LetGo : SafetyHint;
                 case 4: return VRTrainingText.HoldTrigger;
                 case 5: return VRTrainingText.LetGoSlowly;
                 default: return VRTrainingText.PullTrigger;

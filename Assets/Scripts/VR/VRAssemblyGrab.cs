@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.XR.Hands;
 using UnityEngine.XR.Interaction.Toolkit;
 
 namespace VRArmory
@@ -16,6 +17,10 @@ namespace VRArmory
         [Range(0f, 1f)] public float alignedHaptic = 0.15f;
         [Range(0f, 1f)] public float seatedHaptic = 0.6f;
         [Range(0f, 1f)] public float rejectedHaptic = 0.8f;
+
+        [Header("Tracked hands")]
+        [Tooltip("Wrap a tracked hand's middle/ring/little fingers around this part while it is held (the pistol grip).")]
+        public bool wrapTrackedHand;
 
         public AssemblyPart Part { get; private set; }
 
@@ -82,15 +87,23 @@ namespace VRArmory
                 Debug.LogWarning($"[VR Armory] {name} was selected while not grabbable.", this);
             }
             Pulse(args.interactorObject, grabHaptic, 0.05f);
+            SetGripPose(args.interactorObject, true);
         }
 
         protected override void OnSelectExited(SelectExitEventArgs args)
         {
             base.OnSelectExited(args); // XRI has already restored the original parent here
             lastHand = args.interactorObject;
+            SetGripPose(args.interactorObject, false);
             // Skipped while the scene is unloading (Restart / quit): the part is being destroyed anyway and
             // could not start its return-to-bench animation.
             if (interactorsSelecting.Count == 0 && Part.IsHeld && gameObject.activeInHierarchy) Part.EndGrab();
+        }
+
+        private void SetGripPose(IXRInteractor interactor, bool on)
+        {
+            if (wrapTrackedHand && VRHands.Instance != null && VRHands.Instance.IsTrackedHand(interactor, out Handedness side))
+                VRHandGripPose.SetGrip(side, on);
         }
 
         // A light tick when the held part comes into tolerance, so the trainee knows they can let go.

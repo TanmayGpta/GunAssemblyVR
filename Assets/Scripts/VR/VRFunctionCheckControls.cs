@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.XR.Hands;
 using UnityEngine.XR.Interaction.Toolkit;
 
 namespace VRArmory
@@ -9,6 +10,9 @@ namespace VRArmory
     //   index trigger of the hand holding the pistol  -> SetTrigger (analog, so a slow release finds the reset)
     //   A / X button of that hand                      -> SetSafety (toggle)
     //   other hand grips the rear of the slide, pulls  -> SetSlide (how far the hand moved back, springs forward on release)
+    // With tracked hands (controllers put down) the same checks use the real hand:
+    //   index finger curl of the hand holding the pistol -> SetTrigger
+    //   other hand's fingertip pokes the safety lever     -> SetSafety (toggle)
     public class VRFunctionCheckControls : MonoBehaviour
     {
         public FunctionCheck functionCheck;
@@ -16,6 +20,15 @@ namespace VRArmory
         public XRInteractionManager interactionManager;
         public ActionBasedController leftController;
         public ActionBasedController rightController;
+        public VRHands hands;
+
+        [Header("Tracked hands")]
+        [Tooltip("Index finger curl (0 straight .. 1 fully curled) where the trigger starts to move.")]
+        [Range(0f, 1f)] public float fingerCurlRest = 0.35f;
+        [Tooltip("Index finger curl where the trigger is fully pulled.")]
+        [Range(0f, 1f)] public float fingerCurlFull = 0.8f;
+        [Tooltip("Size of the poke zone on the safety lever, in metres.")]
+        public float safetyPokeSize = 0.03f;
 
         [Header("Slide rack grip")]
         [Tooltip("Size of the cube-shaped grab zone at the rear of the slide, in metres.")]
@@ -32,6 +45,8 @@ namespace VRArmory
 
         private InputAction leftPrimary, rightPrimary;
         private XRSimpleInteractable rackGrip;
+        private VRPokeOnlyInteractable safetyPoke;
+        private bool handMode;
         private Vector3 rackStartPoint;      // where the rack hand grabbed, in frame space
         private bool rackGripBuilt;
 
@@ -72,15 +87,25 @@ namespace VRArmory
             if (!rackGripBuilt) BuildRackGrip();
 
             IXRSelectInteractor pistolHand = frameGrab.isSelected ? frameGrab.interactorsSelecting[0] : null;
-            ActionBasedController controller = ControllerOf(pistolHand);
+            Handedness side = Handedness.Invalid;
+            bool trackedHand = hands != null && hands.IsTrackedHand(pistolHand, out side);
+            ActionBasedController controller = trackedHand ? null : ControllerOf(pistolHand);
+            if (pistolHand != null) SetHandMode(trackedHand);
 
-            // Trigger: follows the controller trigger while the pistol is held, springs forward when it is put down.
-            float pull = controller != null
-                ? Mathf.InverseLerp(0.05f, 0.95f, controller.activateActionValue.action.ReadValue<float>())
-                : Mathf.MoveTowards(functionCheck.TriggerPull, 0f, Time.deltaTime / 0.15f);
+            // Trigger: follows the real index finger (tracked hand) or the controller trigger while the pistol is held,
+            // springs forward when it is put down. If the finger is briefly lost, the trigger holds its position.
+            float pull;
+            if (trackedHand)
+                pull = hands.TryGetFingerCurl(side, XRHandFingerID.Index, out float curl)
+                    ? Mathf.InverseLerp(fingerCurlRest, fingerCurlFull, curl)
+                    : functionCheck.TriggerPull;
+            else if (controller != null)
+                pull = Mathf.InverseLerp(0.05f, 0.95f, controller.activateActionValue.action.ReadValue<float>());
+            else
+                pull = Mathf.MoveTowards(functionCheck.TriggerPull, 0f, Time.deltaTime / 0.15f);
             functionCheck.SetTrigger(pull);
 
-            // Safety lever on the A / X button of the holding hand.
+            // Safety lever on the A / X button of the holding hand (tracked hands poke the lever instead).
             if (controller != null && PrimaryPressedThisFrame(pistolHand))
             {
                 functionCheck.SetSafety(!functionCheck.SafetyOn);
@@ -141,6 +166,46 @@ namespace VRArmory
             rackGrip.colliders.Add(box);
             rackGrip.selectEntered.AddListener(OnRackGrabbed);
             go.SetActive(true);
+
+            BuildSafetyPoke();
+        }
+
+        // Panel / tooltip wording follows whichever input is in use.
+        private void SetHandMode(bool on)
+        {
+            if (handMode == on) return;
+            handMode = on;
+            functionCheck.safetyControl = on ? "[POKE SAFETY LEVER]" : "[A / X BUTTON]";
+            functionCheck.triggerControl = on ? "[CURL INDEX FINGER]" : "[INDEX TRIGGER]";
+        }
+
+        public bool HandMode => handMode;
+
+        // Fingertip poke zone on the safety lever (only XRPokeInteractor can use it, so it never blocks the rack grip).
+        private void BuildSafetyPoke()
+        {
+            Transform lever = functionCheck.SafetyPiece;
+            if (lever == null) return;
+            Bounds b = WorldBounds(lever);
+            GameObject go = new GameObject("VR_Safety_Poke");
+            go.SetActive(false);
+            go.transform.SetParent(lever, false);
+            go.transform.position = b.center;
+            BoxCollider box = go.AddComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.size = Vector3.one * (safetyPokeSize / go.transform.lossyScale.x);
+            safetyPoke = go.AddComponent<VRPokeOnlyInteractable>();
+            safetyPoke.interactionManager = interactionManager;
+            safetyPoke.colliders.Add(box);
+            safetyPoke.selectEntered.AddListener(OnSafetyPoked);
+            go.SetActive(true);
+        }
+
+        private void OnSafetyPoked(SelectEnterEventArgs args)
+        {
+            if (!functionCheck.IsRunning) return;
+            functionCheck.SetSafety(!functionCheck.SafetyOn);
+            VRAssemblyGrab.Pulse(args.interactorObject, safetyHaptic, 0.04f);
         }
 
         private void OnRackGrabbed(SelectEnterEventArgs args)

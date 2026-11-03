@@ -49,6 +49,7 @@ namespace VRArmory
         public bool HasRig => rigBuilt;
         public Transform SlidePiece => slideT;
         public Transform TriggerPiece => trigger?.t;
+        public Transform SafetyPiece => lever?.t;
         public Vector3 SlideLocalPosition(float amount) => Vector3.Lerp(slideRestLocal, slideBackLocal, amount);
 
         public void TriggerLocalPose(float pull, out Vector3 localPosition, out Quaternion localRotation)

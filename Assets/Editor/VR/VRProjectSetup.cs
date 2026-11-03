@@ -8,6 +8,7 @@ using UnityEditor.XR.OpenXR;
 using UnityEditor.XR.OpenXR.Features;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.XR.Hands.OpenXR;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.OpenXR.Features;
@@ -36,6 +37,7 @@ namespace VRArmory.Editor
             ConfigureOpenXR();
             ConfigureQuestQuality();
             ConfigureInteractionLayers();
+            ImportHandSamples();
             AssetDatabase.SaveAssets();
             Debug.Log("[VR Armory] Project configured for Meta Quest 3S (OpenXR, Android ARM64, IL2CPP, GLES3, Single Pass Instanced).");
             LogOpenXRValidation();
@@ -76,13 +78,22 @@ namespace VRArmory.Editor
                 EditorBuildSettings.AddConfigObject(XRGeneralSettings.k_SettingsKey, perTarget, true);
             }
 
+            // Standalone (Windows PC / Meta Horizon Link)
+            if (!perTarget.HasSettingsForBuildTarget(BuildTargetGroup.Standalone)) perTarget.CreateDefaultSettingsForBuildTarget(BuildTargetGroup.Standalone);
+            if (!perTarget.HasManagerSettingsForBuildTarget(BuildTargetGroup.Standalone)) perTarget.CreateDefaultManagerSettingsForBuildTarget(BuildTargetGroup.Standalone);
+            XRGeneralSettings standalone = perTarget.SettingsForBuildTarget(BuildTargetGroup.Standalone);
+            standalone.InitManagerOnStart = true;
+            XRPackageMetadataStore.AssignLoader(standalone.AssignedSettings, typeof(OpenXRLoader).FullName, BuildTargetGroup.Standalone);
+            EditorUtility.SetDirty(standalone);
+
+            // Android (Meta Quest 3S Standalone APK)
             if (!perTarget.HasSettingsForBuildTarget(BuildTargetGroup.Android)) perTarget.CreateDefaultSettingsForBuildTarget(BuildTargetGroup.Android);
             if (!perTarget.HasManagerSettingsForBuildTarget(BuildTargetGroup.Android)) perTarget.CreateDefaultManagerSettingsForBuildTarget(BuildTargetGroup.Android);
-
             XRGeneralSettings android = perTarget.SettingsForBuildTarget(BuildTargetGroup.Android);
             android.InitManagerOnStart = true;
             XRPackageMetadataStore.AssignLoader(android.AssignedSettings, typeof(OpenXRLoader).FullName, BuildTargetGroup.Android);
             EditorUtility.SetDirty(android);
+
             EditorUtility.SetDirty(perTarget);
         }
 
@@ -114,7 +125,48 @@ namespace VRArmory.Editor
             questFeature.ApplyModifiedProperties();
             EnableFeature<OculusTouchControllerProfile>(settings);          // Quest 2 / Pro style mapping
             EnableFeature<MetaQuestTouchPlusControllerProfile>(settings);   // Quest 3 / 3S Touch Plus controllers
+            // Hand tracking: the headset switches to tracked hands when the controllers are put down. With the Meta Quest
+            // feature on, XR Hands adds the HAND_TRACKING permission and an optional (required=false) handtracking feature.
+            EnableFeature<HandTracking>(settings);          // joint data for the hand mesh and finger trigger
+            EnableFeature<MetaHandTrackingAim>(settings);   // system pinch/aim pose for hand rays
             EditorUtility.SetDirty(settings);
+
+            // --- Standalone (Windows PC / Meta Horizon Link) ---
+            FeatureHelpers.RefreshFeatures(BuildTargetGroup.Standalone);
+            OpenXRSettings standaloneSettings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Standalone);
+            if (standaloneSettings != null)
+            {
+                standaloneSettings.renderMode = OpenXRSettings.RenderMode.SinglePassInstanced;
+                standaloneSettings.depthSubmissionMode = OpenXRSettings.DepthSubmissionMode.Depth16Bit;
+                EnableFeature<OculusTouchControllerProfile>(standaloneSettings);
+                EnableFeature<MetaQuestTouchPlusControllerProfile>(standaloneSettings);
+                EnableFeature<HandTracking>(standaloneSettings);
+                EnableFeature<MetaHandTrackingAim>(standaloneSettings);
+                EditorUtility.SetDirty(standaloneSettings);
+            }
+        }
+
+        // Hand visuals and the controller/hand switching rig come from two official samples:
+        //   XR Hands > HandVisualizer and XR Interaction Toolkit > Hands Interaction Demo (needs Shader Graph).
+        public const string HandsSetupPrefabPath = "Assets/Samples/XR Interaction Toolkit/2.6.4/Hands Interaction Demo/Prefabs/XR Interaction Hands Setup.prefab";
+
+        [MenuItem("Tools/VR Armory/VR/Import Hand Tracking Samples", priority = 20)]
+        public static void ImportHandSamples()
+        {
+            ImportSample("com.unity.xr.hands", "1.4.1", "HandVisualizer");
+            ImportSample("com.unity.xr.interaction.toolkit", "2.6.4", "Hands Interaction Demo");
+        }
+
+        static void ImportSample(string package, string version, string sampleName)
+        {
+            foreach (var sample in UnityEditor.PackageManager.UI.Sample.FindByPackage(package, version))
+            {
+                if (sample.displayName != sampleName) continue;
+                if (!sample.isImported && !sample.Import(UnityEditor.PackageManager.UI.Sample.ImportOptions.HideImportWindow))
+                    Debug.LogError($"[VR Armory] Could not import sample '{sampleName}' from {package}.");
+                return;
+            }
+            Debug.LogError($"[VR Armory] Sample '{sampleName}' not found in {package}@{version}. Is the package installed?");
         }
 
         static void EnableFeature<T>(OpenXRSettings settings) where T : OpenXRFeature

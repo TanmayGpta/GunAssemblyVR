@@ -6,6 +6,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Inputs;
 using UnityEngine.XR.Interaction.Toolkit.Samples.StarterAssets;
 using UnityEngine.XR.Interaction.Toolkit.Transformers;
 using UnityEngine.XR.Interaction.Toolkit.UI;
@@ -21,7 +22,10 @@ namespace VRArmory.Editor
     {
         const string RootName = "VR_Version1";
         const string ContentName = "VR_Content";
-        const string SetupPrefabPath = "Assets/Samples/XR Interaction Toolkit/2.6.4/Starter Assets/Prefabs/XR Interaction Setup.prefab";
+        // Hands rig: controllers when they are held, tracked hands when they are put down (XR Input Modality Manager).
+        const string SetupPrefabPath = VRProjectSetup.HandsSetupPrefabPath;
+        const string OldSetupName = "XR Interaction Setup"; // controller-only rig from Version 1
+        const float GrabEaseIn = 0.15f; // s for a grabbed part to travel into the hand
         const string GuideMaterialPath = "Assets/Materials/VR/VR_Guide_Line.mat";
         const string GhostMaterialPath = "Assets/Materials/VR/VR_Ghost_Demo.mat";
         const float WalkSpeed = 1.6f;  // m/s, normal walking pace
@@ -68,7 +72,7 @@ namespace VRArmory.Editor
             GameObject setupPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(SetupPrefabPath);
             if (manager == null || desktopPlayer == null || setupPrefab == null)
             {
-                Debug.LogError("[VR Armory] VR setup needs Gun_Assembly_Manager, Armorer_Player and the XRI Starter Assets sample.");
+                Debug.LogError("[VR Armory] VR setup needs Gun_Assembly_Manager, Armorer_Player and the XRI Hands Interaction Demo sample (Tools > VR Armory > VR > Import Hand Tracking Samples).");
                 return false;
             }
             FunctionCheck functionCheck = manager.GetComponent<FunctionCheck>();
@@ -77,7 +81,10 @@ namespace VRArmory.Editor
             Transform content = FindOrCreate(root.transform, ContentName).transform;
             content.gameObject.SetActive(true); // while building
 
-            // --- XR rig: Unity's Starter Assets "XR Interaction Setup" (interaction manager, EventSystem, XR Origin) ---
+            // --- XR rig: the Hands Interaction Demo "XR Interaction Hands Setup" (interaction manager, EventSystem,
+            // XR Origin with controllers + tracked hands). It replaces the controller-only rig of earlier versions.
+            Transform oldSetup = content.Find(OldSetupName);
+            if (oldSetup != null) Object.DestroyImmediate(oldSetup.gameObject);
             Transform setupT = content.Find(setupPrefab.name);
             if (setupT == null)
             {
@@ -102,6 +109,7 @@ namespace VRArmory.Editor
                 so.FindProperty("m_SmoothTurnEnabled").boolValue = !left;
                 so.FindProperty("m_TeleportModeActivate").objectReferenceValue = null;
                 so.FindProperty("m_TeleportModeCancel").objectReferenceValue = null;
+                so.FindProperty("m_KeepLocomotionWhileHolding").boolValue = true; // thumbstick never moves a held part
                 so.ApplyModifiedProperties();
             }
             foreach (DynamicMoveProvider move in setupT.GetComponentsInChildren<DynamicMoveProvider>(true))
@@ -116,9 +124,66 @@ namespace VRArmory.Editor
                 so.FindProperty("m_TurnSpeed").floatValue = TurnSpeed;
                 so.ApplyModifiedProperties();
             }
+            // No comfort vignette: the Starter Assets tunneling vignette narrows the view while moving/turning.
+            foreach (TunnelingVignetteController vignette in setupT.GetComponentsInChildren<TunnelingVignetteController>(true))
+            {
+                vignette.gameObject.SetActive(false);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(vignette.gameObject);
+            }
+
+            // Controller and hand rays: a far grab pulls the part into the hand (force grab) and the thumbstick no longer
+            // pushes/rotates what is held (no anchor control), so the wrist does all repositioning.
+            // The pointer line stays dim until it is over a panel, button or interactable.
+            foreach (XRRayInteractor ray in setupT.GetComponentsInChildren<XRRayInteractor>(true))
+            {
+                if (ray.name.Contains("Teleport")) continue;
+                var raySo = new SerializedObject(ray);
+                raySo.FindProperty("m_UseForceGrab").boolValue = true;
+                raySo.FindProperty("m_AllowAnchorControl").boolValue = false;
+                raySo.ApplyModifiedProperties();
+                if (ray.GetComponent<XRInteractorLineVisual>() != null)
+                    GetOrAdd<VRRayHoverDimmer>(ray.gameObject);
+            }
+
+            // Tracked hands: who is a hand vs a controller, finger curl, and the grip wrap while holding the pistol.
+            XRInputModalityManager modality = setupT.GetComponentInChildren<XRInputModalityManager>(true);
+            GameObject handsObject = FindOrCreate(content, "VR_Hands");
+            VRHands hands = GetOrAdd<VRHands>(handsObject);
+            hands.modality = modality;
+            GetOrAdd<VRHandGripPose>(handsObject);
+            if (modality == null) Debug.LogWarning("[VR Armory] No XR Input Modality Manager on the rig: controller/hand switching will not work.");
+
+            // One hand mesh per hand: the Left/Right Hand Interaction Visuals drive themselves (XRHandSkeletonDriver),
+            // so the rig's extra XR Hands "Hand Visualizer" only adds a second copy of each hand.
+            foreach (Transform t in origin.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name != "Hand Visualizer") continue;
+                t.gameObject.SetActive(false);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(t.gameObject);
+            }
+            EditorUtility.SetDirty(hands);
+
+            // Hand-mode movement: free-hand pinch teleport (controllers stay joystick-only, their teleport is off above).
+            VRHandTeleport handTeleport = GetOrAdd<VRHandTeleport>(handsObject);
+            handTeleport.hands = hands;
+            handTeleport.lineMaterial = GetOrCreateGuideMaterial();
+            handTeleport.teleportation = setupT.GetComponentInChildren<TeleportationProvider>(true);
+            if (handTeleport.teleportation == null)
+            {
+                LocomotionSystem locomotion = setupT.GetComponentInChildren<LocomotionSystem>(true);
+                if (locomotion != null)
+                {
+                    handTeleport.teleportation = GetOrAdd<TeleportationProvider>(locomotion.gameObject);
+                    handTeleport.teleportation.system = locomotion;
+                }
+                else Debug.LogWarning("[VR Armory] No Locomotion System on the rig: hand teleport will not work.");
+            }
+            else handTeleport.teleportation.enabled = true;
+            EditorUtility.SetDirty(handTeleport);
+
             GetOrAdd<VRLocomotionCollision>(FindOrCreate(content, "VR_Locomotion_Collision")).body = origin.GetComponent<CharacterController>();
-            ActionBasedController leftController = FindController(origin, "Left Controller");
-            ActionBasedController rightController = FindController(origin, "Right Controller");
+            ActionBasedController leftController = FindController(origin, modality != null ? modality.leftController : null, "Left Controller");
+            ActionBasedController rightController = FindController(origin, modality != null ? modality.rightController : null, "Right Controller");
             Camera xrCamera = origin.Camera;
 
             // --- Gun parts: XR grab, saved disabled ---
@@ -148,6 +213,7 @@ namespace VRArmory.Editor
             fcControls.interactionManager = interactionManager;
             fcControls.leftController = leftController;
             fcControls.rightController = rightController;
+            fcControls.hands = hands;
 
             // In-world hints (highlight, target line, direction arrows, controller tooltips) + placement assist.
             VRGuidance guidance = GetOrAdd<VRGuidance>(FindOrCreate(content, "VR_Guidance"));
@@ -214,7 +280,20 @@ namespace VRArmory.Editor
             grab.interactionManager = interactionManager;
             grab.movementType = XRBaseInteractable.MovementType.Instantaneous;
             grab.throwOnDetach = false;          // released parts are handled by the sockets / return to the bench
-            grab.useDynamicAttach = true;        // held where it was grabbed: no jump into the palm
+            grab.attachEaseInTime = GrabEaseIn;  // a grabbed part travels smoothly into the hand
+            if (part.partType == GunPart.LowerFrame)
+            {
+                // The pistol always lands in the palm by its grip, muzzle forward; a tracked hand wraps around it.
+                grab.useDynamicAttach = false;
+                grab.attachTransform = GetOrCreateGripAttach(part.transform);
+                grab.wrapTrackedHand = true;
+            }
+            else
+            {
+                grab.useDynamicAttach = true;    // small parts: held where they were grabbed, keeping their rotation
+                grab.matchAttachRotation = true;
+                grab.wrapTrackedHand = false;
+            }
             grab.trackScale = false;
             grab.retainTransformParent = true;
             grab.addDefaultGrabTransformers = false;
@@ -522,14 +601,80 @@ namespace VRArmory.Editor
 
         // ---------- helpers ----------
 
-        static ActionBasedController FindController(XROrigin origin, string name)
+        static ActionBasedController FindController(XROrigin origin, GameObject modalityObject, string name)
         {
+            if (modalityObject != null)
+            {
+                ActionBasedController fromModality = modalityObject.GetComponentInChildren<ActionBasedController>(true);
+                if (fromModality != null) return fromModality;
+            }
             foreach (ActionBasedController c in origin.GetComponentsInChildren<ActionBasedController>(true))
             {
                 if (c.name == name) return c;
             }
             Debug.LogWarning($"[VR Armory] {name} not found in the XR Origin.");
             return null;
+        }
+
+        // Attach point at the pistol grip, in frame space: centred on the grip panels and moved up towards the web of
+        // the hand, facing the muzzle (backstrap -> frontstrap), up towards the hammer. Axes are snapped to the nearest
+        // frame axis, since the frame is modelled axis-aligned.
+        static Transform GetOrCreateGripAttach(Transform frame)
+        {
+            const string attachName = "VR_Grip_Attach";
+            Transform attach = frame.Find(attachName);
+            if (attach == null)
+            {
+                attach = new GameObject(attachName).transform;
+                attach.SetParent(frame, false);
+            }
+
+            Bounds grip = default;
+            bool any = false, hasFront = false, hasBack = false, hasHammer = false;
+            Vector3 front = Vector3.zero, back = Vector3.zero, hammer = Vector3.zero;
+            foreach (Renderer r in frame.GetComponentsInChildren<Renderer>(true))
+            {
+                string n = r.name;
+                Vector3 c = frame.InverseTransformPoint(r.bounds.center);
+                if (n.StartsWith("Grip_"))
+                {
+                    if (!any)
+                    {
+                        grip = new Bounds(c, Vector3.zero);
+                        any = true;
+                    }
+                    grip.Encapsulate(frame.InverseTransformPoint(r.bounds.min));
+                    grip.Encapsulate(frame.InverseTransformPoint(r.bounds.max));
+                }
+                if (n == "Grip_Frontstrap_Fill") { front = c; hasFront = true; }
+                else if (n == "Grip_Backstrap_Fill") { back = c; hasBack = true; }
+                else if (n == "Hammer") { hammer = c; hasHammer = true; }
+            }
+            if (!any || !hasFront || !hasBack || !hasHammer)
+            {
+                Debug.LogWarning("[VR Armory] Grip pieces not found on the frame; the pistol will be held at its pivot.");
+                attach.localPosition = Vector3.zero;
+                attach.localRotation = Quaternion.identity;
+                return attach;
+            }
+
+            Vector3 up = Cardinal(hammer - grip.center);
+            Vector3 forward = front - back;
+            forward -= Vector3.Dot(forward, up) * up;
+            forward = Cardinal(forward);
+            float height = Vector3.Dot(grip.size, new Vector3(Mathf.Abs(up.x), Mathf.Abs(up.y), Mathf.Abs(up.z)));
+            attach.localPosition = grip.center + up * (height * 0.2f);
+            attach.localRotation = Quaternion.LookRotation(forward, up);
+            EditorUtility.SetDirty(attach);
+            return attach;
+        }
+
+        static Vector3 Cardinal(Vector3 v)
+        {
+            Vector3 a = new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
+            if (a.x >= a.y && a.x >= a.z) return new Vector3(Mathf.Sign(v.x), 0f, 0f);
+            if (a.y >= a.z) return new Vector3(0f, Mathf.Sign(v.y), 0f);
+            return new Vector3(0f, 0f, Mathf.Sign(v.z));
         }
 
         static Light[] FindLights(params string[] names)
