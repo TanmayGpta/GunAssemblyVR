@@ -1,13 +1,19 @@
+using System;
 using UnityEngine.XR.Interaction.Toolkit;
 
 namespace VRArmory
 {
-    // A simple interactable only a fingertip poke can use. Grab interactors ignore it, so it never steals a grab from
-    // a zone next to it (the safety lever sits right beside the slide's rack grip).
+    // A simple interactable with a custom "who may use me" rule. By default only a fingertip poke can use it; grab
+    // interactors ignore it, so it never steals a grab from a zone next to it (the safety lever sits right beside the
+    // slide's rack grip). Set canUse to change the rule (e.g. "poke or ray, but not the hand holding the pistol").
     public class VRPokeOnlyInteractable : XRSimpleInteractable
     {
-        public override bool IsHoverableBy(IXRHoverInteractor interactor) => interactor is XRPokeInteractor && base.IsHoverableBy(interactor);
+        public Func<IXRInteractor, bool> canUse;
 
-        public override bool IsSelectableBy(IXRSelectInteractor interactor) => interactor is XRPokeInteractor && base.IsSelectableBy(interactor);
+        bool Allowed(IXRInteractor interactor) => canUse != null ? canUse(interactor) : interactor is XRPokeInteractor;
+
+        public override bool IsHoverableBy(IXRHoverInteractor interactor) => Allowed(interactor) && base.IsHoverableBy(interactor);
+
+        public override bool IsSelectableBy(IXRSelectInteractor interactor) => Allowed(interactor) && base.IsSelectableBy(interactor);
     }
 }

@@ -26,6 +26,8 @@ namespace VRArmory.Editor
         const string SetupPrefabPath = VRProjectSetup.HandsSetupPrefabPath;
         const string OldSetupName = "XR Interaction Setup"; // controller-only rig from Version 1
         const float GrabEaseIn = 0.15f; // s for a grabbed part to travel into the hand
+        const string HandMaterialPath = "Assets/Samples/XR Hands/1.4.1/HandVisualizer/Materials/HandsDefaultMaterial.mat";
+        const float HandGrabRadius = 0.06f; // m, reach of a tracked hand's close grab
         const string GuideMaterialPath = "Assets/Materials/VR/VR_Guide_Line.mat";
         const string GhostMaterialPath = "Assets/Materials/VR/VR_Ghost_Demo.mat";
         const float WalkSpeed = 1.6f;  // m/s, normal walking pace
@@ -161,6 +163,33 @@ namespace VRArmory.Editor
                 t.gameObject.SetActive(false);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(t.gameObject);
             }
+
+            // Hand mesh material: the sample's Shader Graph hand shader can render doubled with Built-in RP + Single Pass
+            // Instanced, so the hands use the XR Hands sample's Standard-shader material instead.
+            Material handMaterial = AssetDatabase.LoadAssetAtPath<Material>(HandMaterialPath);
+            if (handMaterial == null) Debug.LogWarning($"[VR Armory] {HandMaterialPath} not found (import the hand samples); hands keep the Shader Graph material.");
+            foreach (GameObject handObject in new[] { modality != null ? modality.leftHand : null, modality != null ? modality.rightHand : null })
+            {
+                if (handObject == null) continue;
+                if (handMaterial != null)
+                {
+                    foreach (SkinnedMeshRenderer smr in handObject.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    {
+                        smr.sharedMaterial = handMaterial;
+                        PrefabUtility.RecordPrefabInstancePropertyModifications(smr);
+                    }
+                }
+                // A little more reach for close grabs, so the pistol grip does not need pin-point placement.
+                foreach (XRDirectInteractor direct in handObject.GetComponentsInChildren<XRDirectInteractor>(true))
+                {
+                    foreach (SphereCollider sphere in direct.GetComponents<SphereCollider>())
+                    {
+                        sphere.radius = Mathf.Max(sphere.radius, HandGrabRadius);
+                        PrefabUtility.RecordPrefabInstancePropertyModifications(sphere);
+                    }
+                }
+            }
+            GetOrAdd<VRHandFistGrab>(handsObject).hands = hands;
             EditorUtility.SetDirty(hands);
 
             // Hand-mode movement: free-hand pinch teleport (controllers stay joystick-only, their teleport is off above).
@@ -214,6 +243,8 @@ namespace VRArmory.Editor
             fcControls.leftController = leftController;
             fcControls.rightController = rightController;
             fcControls.hands = hands;
+            fcControls.ghostMaterial = GetOrCreateGhostMaterial();
+            fcControls.lineMaterial = GetOrCreateGuideMaterial();
 
             // In-world hints (highlight, target line, direction arrows, controller tooltips) + placement assist.
             VRGuidance guidance = GetOrAdd<VRGuidance>(FindOrCreate(content, "VR_Guidance"));
@@ -287,6 +318,7 @@ namespace VRArmory.Editor
                 grab.useDynamicAttach = false;
                 grab.attachTransform = GetOrCreateGripAttach(part.transform);
                 grab.wrapTrackedHand = true;
+                grab.snapVolume = GetOrCreateGripSnapVolume(part.transform, grab, interactionManager);
             }
             else
             {
@@ -667,6 +699,53 @@ namespace VRArmory.Editor
             attach.localRotation = Quaternion.LookRotation(forward, up);
             EditorUtility.SetDirty(attach);
             return attach;
+        }
+
+        // While a ray is anywhere over the pistol, its end locks onto one point: the grip attach (where the pistol is
+        // then held). A trigger box around the whole frame is the "anywhere"; a tiny trigger sphere on the grip attach
+        // is the point. Triggers are not used as grab colliders by XRI, so the grab itself is unchanged.
+        // Saved disabled: VRAssemblyGrab switches it on with the VR grab, so desktop mode never sees it.
+        static XRInteractableSnapVolume GetOrCreateGripSnapVolume(Transform frame, XRGrabInteractable grab, XRInteractionManager manager)
+        {
+            Transform attach = grab.attachTransform;
+            SphereCollider point = GetOrAdd<SphereCollider>(attach.gameObject);
+            point.isTrigger = true;
+            point.radius = 0.005f / frame.lossyScale.x;
+            point.center = Vector3.zero;
+
+            GameObject volumeObject = FindOrCreate(frame, "VR_Grip_Snap_Volume");
+            volumeObject.transform.localPosition = Vector3.zero;
+            volumeObject.transform.localRotation = Quaternion.identity;
+            volumeObject.transform.localScale = Vector3.one;
+
+            bool any = false;
+            Bounds local = default;
+            foreach (Renderer r in frame.GetComponentsInChildren<Renderer>(true))
+            {
+                Bounds w = r.bounds;
+                foreach (Vector3 corner in new[] { w.min, w.max, new Vector3(w.min.x, w.min.y, w.max.z), new Vector3(w.max.x, w.max.y, w.min.z) })
+                {
+                    Vector3 c = frame.InverseTransformPoint(corner);
+                    if (!any) { local = new Bounds(c, Vector3.zero); any = true; }
+                    else local.Encapsulate(c);
+                }
+            }
+            BoxCollider box = GetOrAdd<BoxCollider>(volumeObject);
+            box.isTrigger = true;
+            box.center = local.center;
+            box.size = local.size * 1.1f;
+
+            XRInteractableSnapVolume volume = GetOrAdd<XRInteractableSnapVolume>(volumeObject);
+            volume.interactionManager = manager;
+            volume.interactableObject = grab;
+            volume.snapCollider = box;
+            volume.snapToCollider = point;
+            volume.disableSnapColliderWhenSelected = true;
+            volume.enabled = false;
+            EditorUtility.SetDirty(point);
+            EditorUtility.SetDirty(box);
+            EditorUtility.SetDirty(volume);
+            return volume;
         }
 
         static Vector3 Cardinal(Vector3 v)

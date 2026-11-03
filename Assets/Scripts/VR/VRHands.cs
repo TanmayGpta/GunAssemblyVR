@@ -65,6 +65,13 @@ namespace VRArmory
                    || (modality.leftController != null && t.IsChildOf(modality.leftController.transform));
         }
 
+        // The pointing ray of the left or right tracked hand (null if the rig has none).
+        public XRRayInteractor HandRay(bool leftSide)
+        {
+            GameObject hand = modality == null ? null : leftSide ? modality.leftHand : modality.rightHand;
+            return hand != null ? hand.GetComponentInChildren<XRRayInteractor>(true) : null;
+        }
+
         // 0 = finger straight, 1 = fully curled, as estimated by the platform's finger-shape configuration.
         public bool TryGetFingerCurl(Handedness side, XRHandFingerID finger, out float curl)
         {

@@ -21,6 +21,8 @@ namespace VRArmory
         [Header("Tracked hands")]
         [Tooltip("Wrap a tracked hand's middle/ring/little fingers around this part while it is held (the pistol grip).")]
         public bool wrapTrackedHand;
+        [Tooltip("Optional: snaps the ray's end to one point (the grip) while it is anywhere over this part. Enabled only while this grab is (VR only).")]
+        public XRInteractableSnapVolume snapVolume;
 
         public AssemblyPart Part { get; private set; }
 
@@ -42,6 +44,18 @@ namespace VRArmory
                 s.Rejected += OnRejected;
             }
             if (targetSocket != null) targetSocket.Seated += OnSeated;
+        }
+
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            if (snapVolume != null) snapVolume.enabled = true;
+        }
+
+        protected override void OnDisable()
+        {
+            if (snapVolume != null) snapVolume.enabled = false;
+            base.OnDisable();
         }
 
         protected override void OnDestroy()

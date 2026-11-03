@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.XR.Hands;
+using UnityEngine.XR.Hands.Gestures;
 using UnityEngine.XR.Hands.Processing;
 
 namespace VRArmory
@@ -21,6 +22,11 @@ namespace VRArmory
         public int callbackOrder => 100; // after smoothing processors
 
         static bool s_LeftGrip, s_RightGrip;
+        static float s_LeftRawCurl = -1f, s_RightRawCurl = -1f;
+
+        // Average middle + ring finger curl as tracked, measured before the grip wrap bends them (so a hand holding the
+        // pistol can still open to let go). -1 when the hand is not tracked.
+        public static float RawGraspCurl(Handedness side) => side == Handedness.Left ? s_LeftRawCurl : s_RightRawCurl;
 
         // Called by whoever owns the grab (VRAssemblyGrab on the frame).
         public static void SetGrip(Handedness side, bool on)
@@ -56,8 +62,18 @@ namespace VRArmory
 
         public void ProcessJoints(XRHandSubsystem subsystem, XRHandSubsystem.UpdateSuccessFlags successFlags, XRHandSubsystem.UpdateType updateType)
         {
+            s_LeftRawCurl = GraspCurl(subsystem.leftHand);
+            s_RightRawCurl = GraspCurl(subsystem.rightHand);
             if (s_LeftGrip) Wrap(subsystem, subsystem.leftHand);
             if (s_RightGrip) Wrap(subsystem, subsystem.rightHand);
+        }
+
+        static float GraspCurl(XRHand hand)
+        {
+            if (!hand.isTracked) return -1f;
+            if (!hand.CalculateFingerShape(XRHandFingerID.Middle, XRFingerShapeTypes.FullCurl).TryGetFullCurl(out float middle)) return -1f;
+            if (!hand.CalculateFingerShape(XRHandFingerID.Ring, XRFingerShapeTypes.FullCurl).TryGetFullCurl(out float ring)) return -1f;
+            return (middle + ring) * 0.5f;
         }
 
         void Wrap(XRHandSubsystem subsystem, XRHand hand)

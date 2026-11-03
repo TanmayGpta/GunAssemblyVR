@@ -28,7 +28,11 @@ namespace VRArmory
         [Tooltip("Index finger curl where the trigger is fully pulled.")]
         [Range(0f, 1f)] public float fingerCurlFull = 0.8f;
         [Tooltip("Size of the poke zone on the safety lever, in metres.")]
-        public float safetyPokeSize = 0.03f;
+        public float safetyPokeSize = 0.04f;
+        [Tooltip("Translucent material for the ghost marker on the safety lever.")]
+        public Material ghostMaterial;
+        [Tooltip("Unlit vertex-colour material for the guide line from the free hand to the lever.")]
+        public Material lineMaterial;
 
         [Header("Slide rack grip")]
         [Tooltip("Size of the cube-shaped grab zone at the rear of the slide, in metres.")]
@@ -46,6 +50,8 @@ namespace VRArmory
         private InputAction leftPrimary, rightPrimary;
         private XRSimpleInteractable rackGrip;
         private VRPokeOnlyInteractable safetyPoke;
+        private Transform safetyGhost;
+        private LineRenderer safetyLine;
         private bool handMode;
         private Vector3 rackStartPoint;      // where the rack hand grabbed, in frame space
         private bool rackGripBuilt;
@@ -113,6 +119,34 @@ namespace VRArmory
             }
 
             functionCheck.SetSlide(SlideAmountFromHand());
+            UpdateSafetyGhost(pistolHand, trackedHand);
+        }
+
+        // Tracked hands: the safety is worked by the hand NOT holding the pistol (the holding hand cannot reach it), so
+        // when the safety is the next step, a ghost marker glows on the lever and a line runs from the free hand's
+        // pointer to it. Poke it with that fingertip, or point at it and pinch.
+        private void UpdateSafetyGhost(IXRSelectInteractor pistolHand, bool trackedHand)
+        {
+            if (safetyGhost == null) return;
+            int stage = functionCheck.Stage;
+            bool safetyNext = stage == 0 || (stage == 2 && functionCheck.TriggerPull < 0.2f);
+            XRRayInteractor freeRay = trackedHand ? hands.HandRay(!hands.IsLeft(pistolHand)) : null;
+            bool show = safetyNext && freeRay != null && freeRay.isActiveAndEnabled;
+            safetyGhost.gameObject.SetActive(show);
+            safetyLine.enabled = show;
+            if (!show) return;
+
+            float pulse = 0.85f + 0.15f * Mathf.Sin(Time.time * 6f);
+            safetyGhost.localScale = Vector3.one * (safetyPokeSize * 0.8f * pulse / safetyGhost.parent.lossyScale.x);
+            safetyLine.SetPosition(0, freeRay.rayOriginTransform.position);
+            safetyLine.SetPosition(1, safetyGhost.position);
+        }
+
+        // Pistol hand vs free hand: true when the interactor is on the same side as the hand holding the pistol.
+        private bool IsPistolHandSide(IXRInteractor interactor)
+        {
+            if (!frameGrab.isSelected || hands == null) return false;
+            return hands.IsLeft(interactor) == hands.IsLeft(frameGrab.interactorsSelecting[0]);
         }
 
         private float SlideAmountFromHand()
@@ -175,7 +209,7 @@ namespace VRArmory
         {
             if (handMode == on) return;
             handMode = on;
-            functionCheck.safetyControl = on ? "[POKE SAFETY LEVER]" : "[A / X BUTTON]";
+            functionCheck.safetyControl = on ? "[OTHER HAND: POKE OR PINCH SAFETY LEVER]" : "[A / X BUTTON]";
             functionCheck.triggerControl = on ? "[CURL INDEX FINGER]" : "[INDEX TRIGGER]";
         }
 
@@ -191,14 +225,39 @@ namespace VRArmory
             go.SetActive(false);
             go.transform.SetParent(lever, false);
             go.transform.position = b.center;
-            BoxCollider box = go.AddComponent<BoxCollider>();
-            box.isTrigger = true;
+            BoxCollider box = go.AddComponent<BoxCollider>(); // solid, so hand rays can hit it (rays ignore triggers)
             box.size = Vector3.one * (safetyPokeSize / go.transform.lossyScale.x);
             safetyPoke = go.AddComponent<VRPokeOnlyInteractable>();
             safetyPoke.interactionManager = interactionManager;
             safetyPoke.colliders.Add(box);
+            // Fingertip poke or point-and-pinch, only from the free hand. Controllers keep the A / X button.
+            safetyPoke.canUse = i => (i is XRPokeInteractor || i is XRRayInteractor)
+                                     && hands != null && hands.IsTrackedHand(i, out _)
+                                     && !IsPistolHandSide(i);
             safetyPoke.selectEntered.AddListener(OnSafetyPoked);
             go.SetActive(true);
+
+            // Ghost marker + guide line (shown only when the safety is the next step, see UpdateSafetyGhost).
+            GameObject ghost = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            ghost.name = "VR_Safety_Ghost";
+            Destroy(ghost.GetComponent<Collider>());
+            ghost.transform.SetParent(go.transform, false);
+            MeshRenderer ghostRenderer = ghost.GetComponent<MeshRenderer>();
+            if (ghostMaterial != null) ghostRenderer.sharedMaterial = ghostMaterial;
+            ghostRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            safetyGhost = ghost.transform;
+            ghost.SetActive(false);
+
+            safetyLine = new GameObject("VR_Safety_Guide_Line").AddComponent<LineRenderer>();
+            safetyLine.transform.SetParent(transform, false);
+            safetyLine.useWorldSpace = true;
+            safetyLine.positionCount = 2;
+            safetyLine.widthMultiplier = 0.003f;
+            safetyLine.sharedMaterial = lineMaterial;
+            safetyLine.startColor = new Color(0.3f, 0.92f, 0.86f, 0.05f);
+            safetyLine.endColor = new Color(0.3f, 0.92f, 0.86f, 0.8f);
+            safetyLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            safetyLine.enabled = false;
         }
 
         private void OnSafetyPoked(SelectEnterEventArgs args)

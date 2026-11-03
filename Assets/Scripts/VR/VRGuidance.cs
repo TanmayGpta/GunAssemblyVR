@@ -301,7 +301,7 @@ namespace VRArmory
             }
         }
 
-        private string SafetyHint => functionCheckControls.HandMode ? "Poke safety lever" : VRTrainingText.PressButton(SafetyButton);
+        private string SafetyHint => functionCheckControls.HandMode ? "Other hand: tap safety" : VRTrainingText.PressButton(SafetyButton);
 
         private string StageTooltip(int stage)
         {
