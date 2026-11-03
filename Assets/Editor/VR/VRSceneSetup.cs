@@ -28,6 +28,7 @@ namespace VRArmory.Editor
         const float GrabEaseIn = 0.15f; // s for a grabbed part to travel into the hand
         const string HandMaterialPath = "Assets/Samples/XR Hands/1.4.1/HandVisualizer/Materials/HandsDefaultMaterial.mat";
         const float HandGrabRadius = 0.06f; // m, reach of a tracked hand's close grab
+        const string HandsPrefabFolder = "Assets/Samples/XR Interaction Toolkit/2.6.4/Hands Interaction Demo/Prefabs/";
         const string GuideMaterialPath = "Assets/Materials/VR/VR_Guide_Line.mat";
         const string GhostMaterialPath = "Assets/Materials/VR/VR_Ghost_Demo.mat";
         const float WalkSpeed = 1.6f;  // m/s, normal walking pace
@@ -198,6 +199,16 @@ namespace VRArmory.Editor
             handGrab.coneAngle = 15f;
             handGrab.coneReach = 2f;
             EditorUtility.SetDirty(handGrab);
+
+            // Controllers show the same hands (posed from grip / trigger / thumb touch) instead of controller models.
+            VRControllerHands controllerHands = GetOrAdd<VRControllerHands>(handsObject);
+            controllerHands.hands = hands;
+            controllerHands.leftHandPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(HandsPrefabFolder + "Left Hand Interaction Visual.prefab");
+            controllerHands.rightHandPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(HandsPrefabFolder + "Right Hand Interaction Visual.prefab");
+            controllerHands.handMaterial = handMaterial;
+            if (controllerHands.leftHandPrefab == null || controllerHands.rightHandPrefab == null)
+                Debug.LogWarning("[VR Armory] Hand Interaction Visual prefabs not found: controllers will show controller models.");
+            EditorUtility.SetDirty(controllerHands);
             EditorUtility.SetDirty(hands);
 
             // Hand-mode movement: free-hand pinch teleport (controllers stay joystick-only, their teleport is off above).
