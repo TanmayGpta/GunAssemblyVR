@@ -30,9 +30,9 @@ namespace VRArmory
 
         [Header("Gesture")]
         [Tooltip("Middle + ring finger curl (0 open .. 1 fist) that starts a grab.")]
-        [Range(0f, 1f)] public float fistOn = 0.55f;
+        [Range(0f, 1f)] public float fistOn = 0.7f;
         [Tooltip("Curl below which the hand counts as open again (lets go).")]
-        [Range(0f, 1f)] public float fistOff = 0.35f;
+        [Range(0f, 1f)] public float fistOff = 0.4f;
         [Tooltip("Thumb tip to index tip distance (m) that counts as a pinch.")]
         public float pinchOn = 0.02f;
         [Tooltip("Distance (m) at which the pinch is released.")]
@@ -42,9 +42,9 @@ namespace VRArmory
         [Tooltip("Seconds a part stays the grab target after the hand ray slides off it.")]
         public float stickyTime = 0.5f;
         [Tooltip("Half-angle (deg) of the cone from the palm used when nothing is touched or under the ray.")]
-        public float coneAngle = 25f;
+        public float coneAngle = 15f;
         [Tooltip("Reach (m) of the palm cone.")]
-        public float coneReach = 3f;
+        public float coneReach = 2f;
 
         [Header("Palm grip pose")]
         [Tooltip("How far (m) the grip centre sits in front of the palm, inside the closed fist.")]
@@ -68,6 +68,16 @@ namespace VRArmory
         }
 
         Hand left, right;
+        static bool s_LeftFist, s_RightFist;
+
+        // True while that tracked hand is closed in a grabbing fist (not a pinch).
+        public static bool IsFist(Handedness side) => side == Handedness.Left ? s_LeftFist : s_RightFist;
+
+        static void PublishFist(Hand h)
+        {
+            if (h.side == Handedness.Left) s_LeftFist = h.fist;
+            else s_RightFist = h.fist;
+        }
         Transform trackingSpace;
         VRAssemblyGrab[] grabs;
 
@@ -120,6 +130,7 @@ namespace VRArmory
             if (h.controller == null || h.direct == null || !h.controller.isActiveAndEnabled)
             {
                 h.fist = h.pinch = h.wasActive = h.wasUIPress = false;
+                PublishFist(h);
                 return;
             }
             UpdatePalmAttach(h);
@@ -128,6 +139,7 @@ namespace VRArmory
             h.pinch = h.pinch ? pinchDistance < pinchOff : pinchDistance < pinchOn;
             float curl = VRHandGripPose.RawGraspCurl(h.side);
             h.fist = curl >= 0f && (h.fist ? curl > fistOff : curl > fistOn);
+            PublishFist(h);
 
             bool rayActive = h.ray != null && h.ray.isActiveAndEnabled;
             if (rayActive && h.ray.interactablesHovered.Count > 0 && h.ray.interactablesHovered[0] is IXRSelectInteractable hovered)

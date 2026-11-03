@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR.Hands;
 using UnityEngine.XR.Hands.Gestures;
@@ -63,6 +64,27 @@ namespace VRArmory
             Transform t = interactor.transform;
             return (modality.leftHand != null && t.IsChildOf(modality.leftHand.transform))
                    || (modality.leftController != null && t.IsChildOf(modality.leftController.transform));
+        }
+
+        Transform m_TrackingSpace;
+
+        // World position of a hand joint (joint poses are in the XR Origin's tracking space).
+        public bool TryGetJointPosition(Handedness side, XRHandJointID joint, out Vector3 world)
+        {
+            world = default;
+            XRHandSubsystem subsystem = Subsystem;
+            if (subsystem == null) return false;
+            if (m_TrackingSpace == null)
+            {
+                XROrigin origin = modality != null ? modality.GetComponentInParent<XROrigin>() : null;
+                if (origin == null) origin = FindObjectOfType<XROrigin>();
+                if (origin == null) return false;
+                m_TrackingSpace = origin.CameraFloorOffsetObject.transform;
+            }
+            XRHand hand = side == Handedness.Left ? subsystem.leftHand : subsystem.rightHand;
+            if (!hand.isTracked || !hand.GetJoint(joint).TryGetPose(out Pose pose)) return false;
+            world = m_TrackingSpace.TransformPoint(pose.position);
+            return true;
         }
 
         // The pointing ray of the left or right tracked hand (null if the rig has none).

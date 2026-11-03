@@ -29,6 +29,10 @@ namespace VRArmory
         [Range(0f, 1f)] public float fingerCurlFull = 0.8f;
         [Tooltip("Size of the poke zone on the safety lever, in metres.")]
         public float safetyPokeSize = 0.04f;
+        [Tooltip("A free-hand pinch whose pinch point is within this distance (m) of the safety lever flips it.")]
+        public float safetyPinchDistance = 0.04f;
+        [Tooltip("Thumb tip to index tip distance (m) that counts as a pinch (released again above 1.75x this).")]
+        public float pinchOn = 0.02f;
         [Tooltip("Translucent material for the ghost marker on the safety lever.")]
         public Material ghostMaterial;
         [Tooltip("Unlit vertex-colour material for the guide line from the free hand to the lever.")]
@@ -48,11 +52,11 @@ namespace VRArmory
         public bool RackGripHeld => rackGrip != null && rackGrip.isSelected;
 
         private InputAction leftPrimary, rightPrimary;
-        private XRSimpleInteractable rackGrip;
-        private VRPokeOnlyInteractable safetyPoke;
+        private VRPokeOnlyInteractable rackGrip;
         private Transform safetyGhost;
         private LineRenderer safetyLine;
         private bool handMode;
+        private bool freePinching;
         private Vector3 rackStartPoint;      // where the rack hand grabbed, in frame space
         private bool rackGripBuilt;
 
@@ -120,11 +124,39 @@ namespace VRArmory
 
             functionCheck.SetSlide(SlideAmountFromHand());
             UpdateSafetyGhost(pistolHand, trackedHand);
+            UpdateSafetyTouch(pistolHand, trackedHand);
         }
 
-        // Tracked hands: the safety is worked by the hand NOT holding the pistol (the holding hand cannot reach it), so
-        // when the safety is the next step, a ghost marker glows on the lever and a line runs from the free hand's
-        // pointer to it. Poke it with that fingertip, or point at it and pinch.
+        // Tracked hands: the safety is worked by the hand NOT holding the pistol (the holding hand cannot reach it), by
+        // pinching at the lever (pinch point = between thumb tip and index tip, from the finger joints). One flip per
+        // pinch. A fist at the slide racks it instead, so the two never get confused.
+        private void UpdateSafetyTouch(IXRSelectInteractor pistolHand, bool trackedHand)
+        {
+            Transform lever = functionCheck.SafetyPiece;
+            if (!trackedHand || lever == null)
+            {
+                freePinching = false;
+                return;
+            }
+            Handedness free = hands.IsLeft(pistolHand) ? Handedness.Right : Handedness.Left;
+            if (!hands.TryGetJointPosition(free, XRHandJointID.ThumbTip, out Vector3 thumb)
+                || !hands.TryGetJointPosition(free, XRHandJointID.IndexTip, out Vector3 index))
+            {
+                freePinching = false;
+                return;
+            }
+
+            float gap = Vector3.Distance(thumb, index);
+            bool pinching = freePinching ? gap < pinchOn * 1.75f : gap < pinchOn;
+            bool pinchStarted = pinching && !freePinching;
+            freePinching = pinching;
+            if (!pinchStarted) return;
+
+            Vector3 pinchPoint = (thumb + index) * 0.5f;
+            if (WorldBounds(lever).SqrDistance(pinchPoint) < safetyPinchDistance * safetyPinchDistance)
+                functionCheck.SetSafety(!functionCheck.SafetyOn);
+        }
+
         private void UpdateSafetyGhost(IXRSelectInteractor pistolHand, bool trackedHand)
         {
             if (safetyGhost == null) return;
@@ -195,9 +227,10 @@ namespace VRArmory
             BoxCollider box = go.AddComponent<BoxCollider>();
             box.size = Vector3.one * (rackGripSize / go.transform.lossyScale.x); // the frame is scaled uniformly
 
-            rackGrip = go.AddComponent<XRSimpleInteractable>();
+            rackGrip = go.AddComponent<VRPokeOnlyInteractable>();
             rackGrip.interactionManager = interactionManager;
             rackGrip.colliders.Add(box);
+            rackGrip.canUse = CanRack;
             rackGrip.selectEntered.AddListener(OnRackGrabbed);
             go.SetActive(true);
 
@@ -209,13 +242,24 @@ namespace VRArmory
         {
             if (handMode == on) return;
             handMode = on;
-            functionCheck.safetyControl = on ? "[OTHER HAND: POKE OR PINCH SAFETY LEVER]" : "[A / X BUTTON]";
+            functionCheck.safetyControl = on ? "[OTHER HAND: PINCH SAFETY LEVER]" : "[A / X BUTTON]";
             functionCheck.triggerControl = on ? "[CURL INDEX FINGER]" : "[INDEX TRIGGER]";
         }
 
         public bool HandMode => handMode;
 
-        // Fingertip poke zone on the safety lever (only XRPokeInteractor can use it, so it never blocks the rack grip).
+        // Who may rack the slide: never the hand holding the pistol, never a poke. A tracked hand must close in a fist on
+        // the rear of the slide with its direct interactor (a pinch is for the safety, and the hand ray would let finger
+        // fidgeting grab it). Controllers: the other controller's grip, as before.
+        private bool CanRack(IXRInteractor interactor)
+        {
+            if (interactor is XRPokeInteractor || IsPistolHandSide(interactor)) return false;
+            if (hands != null && hands.IsTrackedHand(interactor, out Handedness side))
+                return interactor is XRDirectInteractor && (rackGrip.isSelected || VRHandFistGrab.IsFist(side));
+            return true;
+        }
+
+        // Anchor for the ghost marker on the safety lever.
         private void BuildSafetyPoke()
         {
             Transform lever = functionCheck.SafetyPiece;
@@ -225,16 +269,6 @@ namespace VRArmory
             go.SetActive(false);
             go.transform.SetParent(lever, false);
             go.transform.position = b.center;
-            BoxCollider box = go.AddComponent<BoxCollider>(); // solid, so hand rays can hit it (rays ignore triggers)
-            box.size = Vector3.one * (safetyPokeSize / go.transform.lossyScale.x);
-            safetyPoke = go.AddComponent<VRPokeOnlyInteractable>();
-            safetyPoke.interactionManager = interactionManager;
-            safetyPoke.colliders.Add(box);
-            // Fingertip poke or point-and-pinch, only from the free hand. Controllers keep the A / X button.
-            safetyPoke.canUse = i => (i is XRPokeInteractor || i is XRRayInteractor)
-                                     && hands != null && hands.IsTrackedHand(i, out _)
-                                     && !IsPistolHandSide(i);
-            safetyPoke.selectEntered.AddListener(OnSafetyPoked);
             go.SetActive(true);
 
             // Ghost marker + guide line (shown only when the safety is the next step, see UpdateSafetyGhost).
@@ -258,13 +292,6 @@ namespace VRArmory
             safetyLine.endColor = new Color(0.3f, 0.92f, 0.86f, 0.8f);
             safetyLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             safetyLine.enabled = false;
-        }
-
-        private void OnSafetyPoked(SelectEnterEventArgs args)
-        {
-            if (!functionCheck.IsRunning) return;
-            functionCheck.SetSafety(!functionCheck.SafetyOn);
-            VRAssemblyGrab.Pulse(args.interactorObject, safetyHaptic, 0.04f);
         }
 
         private void OnRackGrabbed(SelectEnterEventArgs args)

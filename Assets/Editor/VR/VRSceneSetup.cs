@@ -189,7 +189,15 @@ namespace VRArmory.Editor
                     }
                 }
             }
-            GetOrAdd<VRHandFistGrab>(handsObject).hands = hands;
+            // Hand grab, toned down so the pistol is not grabbed by a half-closed hand or a loose aim:
+            // a firmer fist, a narrower/shorter aim cone.
+            VRHandFistGrab handGrab = GetOrAdd<VRHandFistGrab>(handsObject);
+            handGrab.hands = hands;
+            handGrab.fistOn = 0.7f;
+            handGrab.fistOff = 0.4f;
+            handGrab.coneAngle = 15f;
+            handGrab.coneReach = 2f;
+            EditorUtility.SetDirty(handGrab);
             EditorUtility.SetDirty(hands);
 
             // Hand-mode movement: free-hand pinch teleport (controllers stay joystick-only, their teleport is off above).
