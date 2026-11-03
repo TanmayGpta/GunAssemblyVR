@@ -6,12 +6,13 @@ using UnityEngine;
 
 namespace VRArmory.Editor
 {
-    // Builds the standalone Quest APK to Builds/Android/GunAssemblyVR_v1_1.apk (the Builds folder is git-ignored).
+    // Builds the standalone Quest APK to Builds/Android/GunAssemblyVR_v1_2.apk (the Builds folder is git-ignored).
+    // Each version gets its own file name, so the previous working APK is never overwritten.
     //   Tools > VR Armory > VR > 3. Build Quest APK
     // Command line: Unity.exe -batchmode -buildTarget Android -projectPath <project> -executeMethod VRArmory.Editor.VRBuild.BuildQuestApk -quit
     public static class VRBuild
     {
-        public const string ApkPath = "Builds/Android/GunAssemblyVR_v1_1.apk";
+        public const string ApkPath = "Builds/Android/GunAssemblyVR_v1_2.apk";
 
         [MenuItem("Tools/VR Armory/VR/3. Build Quest APK", priority = 3)]
         public static void BuildQuestApk()

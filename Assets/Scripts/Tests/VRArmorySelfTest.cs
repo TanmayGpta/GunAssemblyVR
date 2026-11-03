@@ -48,10 +48,11 @@ namespace VRArmory.Tests
         }
 
         // A failing nested step can stop the test coroutine without an exception reaching it; never hang a batch run.
+        // (v1.2: the VR run now waits for real spoken lines and demonstrations, so it takes longer than before.)
         IEnumerator Watchdog()
         {
-            yield return new WaitForSecondsRealtime(240f);
-            Check("watchdog-timeout", false, "test did not finish within 240 s");
+            yield return new WaitForSecondsRealtime(420f);
+            Check("watchdog-timeout", false, "test did not finish within 420 s");
             Debug.Log($"{ResultLine}|{mode}|summary|FAIL|pass={pass} fail={fail}");
             SessionState.EraseString(ModeKey);
             SessionState.EraseBool(VRPlatformSwitch.ForceVRSessionKey);
@@ -70,6 +71,7 @@ namespace VRArmory.Tests
                     errors++;
                     Debug.Log($"{ResultLine}|{mode}|console-error|INFO|{msg}");
                 }
+                if (type == LogType.Warning && msg.Contains("has no clip")) missingClipWarnings++;
             };
             yield return null;
             yield return null;
@@ -153,6 +155,9 @@ namespace VRArmory.Tests
             Check("v11-desktop-no-vr-guidance", FindObjectsOfType<VRPlacementAssist>().Length == 0 && FindObjectsOfType<VRGuidance>().Length == 0
                                                 && FindObjectsOfType<VRTrainingMenu>().Length == 0);
             Check("v11-desktop-socket-style-unchanged", S("Socket_Barrel").amberWhenMisaligned && S("Socket_Barrel").faintAlphaBoost == 0f && S("Socket_Barrel").showInsertionPath);
+            // v1.2: the voice guide and the ghost demonstrations are VR-only too.
+            Check("v12-desktop-no-voice-or-ghosts", FindObjectsOfType<VRTrainingCoach>().Length == 0 && FindObjectsOfType<VRVoiceGuide>().Length == 0
+                                                    && FindObjectsOfType<VRGhostDemo>().Length == 0 && FindObjectsOfType<GhostVisual>(true).Length == 0);
 
             // Rejections (audit tests), now with feedback + mistake count.
             yield return Place(P(GunPart.RecoilSpring), S("Socket_RecoilSpring"), Quaternion.identity);
@@ -288,7 +293,7 @@ namespace VRArmory.Tests
             public XRSimulatedController device;
             public Vector3 pos;
             public Quaternion rot = Quaternion.identity;
-            public bool grip, trigger, primary;
+            public bool grip, trigger, primary, secondary;
             public float triggerValue = -1f;
         }
         Hand L, R;
@@ -310,6 +315,7 @@ namespace VRArmory.Tests
             if (h.grip) s = s.WithButton(ControllerButton.GripButton);
             if (h.trigger || h.triggerValue > 0.5f) s = s.WithButton(ControllerButton.TriggerButton);
             if (h.primary) s = s.WithButton(ControllerButton.PrimaryButton);
+            if (h.secondary) s = s.WithButton(ControllerButton.SecondaryButton);
             InputSystem.QueueStateEvent(h.device, s);
         }
 
@@ -379,6 +385,29 @@ namespace VRArmory.Tests
                 $"panel {toPanel} from the stand point");
             Check("v11-assist-added-to-every-part", FindObjectsOfType<VRPlacementAssist>().Length == 5);
 
+            // ---- v1.2: voice guide and ghost demonstrations are wired, and every line has its recording
+            HookCoach();
+            StartCoroutine(VoiceOverlapMonitor());
+            Check("v12-coach-wired", coach != null && voice != null && ghost != null && coach.voice == voice && coach.ghost == ghost && coach.menu == menu
+                                     && ghost.ghostMaterial != null && ghost.ghostMaterial.shader.name == "VRArmory/GhostDemo" && menu.repeatButton != null,
+                $"coach={coach != null} voice={voice != null} ghost={ghost != null} material={ghost?.ghostMaterial?.shader.name}");
+            VoiceLine[] allLines = Array.FindAll((VoiceLine[])Enum.GetValues(typeof(VoiceLine)), l => l != VoiceLine.None);
+            VoiceLine[] unrecorded = Array.FindAll(allLines, l => voice.ClipFor(l) == null);
+            Check("v12-every-voice-line-recorded", unrecorded.Length == 0 && voice.clips.Length == allLines.Length,
+                $"{allLines.Length - unrecorded.Length}/{allLines.Length} recorded; missing: {string.Join(",", unrecorded)}");
+            Check("v12-voice-clips-quest-settings", Array.TrueForAll(allLines, l => voice.ClipFor(l) == null
+                                                    || (voice.ClipFor(l).channels == 1 && voice.ClipFor(l).loadType == AudioClipLoadType.CompressedInMemory)),
+                "mono, compressed in memory");
+            // The recordings were made from voice_script.tsv; it must still say exactly what VRTrainingText.Spoken says.
+            string script = System.IO.File.Exists("Tools/VoiceGeneration/voice_script.tsv") ? System.IO.File.ReadAllText("Tools/VoiceGeneration/voice_script.tsv") : "";
+            VoiceLine[] outdated = Array.FindAll(allLines, l => !script.Contains($"VO_{l}.wav\t{l}\t{VRTrainingText.Spoken(l)}\n"));
+            Check("v12-recordings-match-script", script.Length > 0 && outdated.Length == 0, "changed since recording: " + string.Join(",", outdated));
+            AudioSource voiceSource = voice.GetComponent<AudioSource>();
+            Check("v12-voice-own-2d-source", voiceSource.spatialBlend == 0f && !voiceSource.loop && voiceSource.priority == 0 && !voiceSource.playOnAwake);
+            Check("v12-welcome-spoken", coach.CurrentCue == VRTrainingCoach.Cue.ChooseModule
+                                        && (voice.Current == VoiceLine.Intro_ChooseModule || Said(VoiceLine.Intro_ChooseModule) == 1),
+                $"cue={coach.CurrentCue} voice={voice.Current}");
+
             hmd = InputSystem.AddDevice<XRSimulatedHMD>();
             left = InputSystem.AddDevice<XRSimulatedController>("SimLeft");
             right = InputSystem.AddDevice<XRSimulatedController>("SimRight");
@@ -407,6 +436,9 @@ namespace VRArmory.Tests
             Check("v11-coming-soon-back", menu.modulesPanel.activeSelf && !menu.comingSoonPanel.activeSelf);
             yield return PressButton(R, menu.assemblyModuleButton);
             Check("v11-assembly-module-opens-briefing", menu.introPanel.activeSelf && !mgr.HasStarted);
+            yield return WaitFor(() => Said(VoiceLine.Intro_Briefing) > 0, 2f);
+            Check("v12-briefing-spoken", Said(VoiceLine.Intro_Briefing) == 1 && Said(VoiceLine.Intro_ChooseModule) <= 1,
+                "coming back to the modules screen does not repeat the welcome");
 
             // ---- UI: point the right ray at START and pull the trigger
             yield return PressButton(R, menu.startButton);
@@ -416,6 +448,9 @@ namespace VRArmory.Tests
             Check("v11-step1-barrel-highlighted", guide.CurrentPhase == VRGuidance.Phase.PickUp && guide.HighlightedPart == P(GunPart.Barrel)
                                                   && menu.headlineText.text == VRTrainingText.PickUp(GunPart.Barrel),
                 $"phase={guide.CurrentPhase} highlighted={guide.HighlightedPart?.name} headline='{menu.headlineText.text}'");
+            yield return WaitFor(() => Said(VoiceLine.Asm_Pick_Barrel) > 0, 2f);
+            Check("v12-step1-instruction-spoken", Said(VoiceLine.Asm_Pick_Barrel) == 1 && coach.CurrentCue == VRTrainingCoach.Cue.PickUpPart,
+                $"cue={coach.CurrentCue}");
 
             // ---- Rejections through real grabs
             yield return GrabAndRelease(L, P(GunPart.RecoilSpring), S("Socket_RecoilSpring"), Quaternion.identity, false);
@@ -424,6 +459,17 @@ namespace VRArmory.Tests
                 menu.feedbackText.text);
             yield return Hold(0.5f);
             Check("vr-part-returned-to-bench", P(GunPart.RecoilSpring).IsGrabbable && !P(GunPart.RecoilSpring).IsHeld);
+            Check("v12-rejection-try-again-spoken", Said(VoiceLine.Asm_TryAgain) == 1 && Said(VoiceLine.Asm_Pick_Barrel) == 1,
+                "the part went back: advice once, the pick-up instruction is not repeated by itself");
+
+            // ---- v1.2: "Hear again" on the panel and B on the controller repeat the current instruction
+            int picks = Said(VoiceLine.Asm_Pick_Barrel);
+            yield return PressButton(R, menu.repeatButton);
+            yield return WaitFor(() => Said(VoiceLine.Asm_Pick_Barrel) > picks, 2f);
+            Check("v12-hear-again-button", Said(VoiceLine.Asm_Pick_Barrel) == picks + 1 && coach.CurrentCue == VRTrainingCoach.Cue.PickUpPart);
+            yield return PressSecondary(R);
+            yield return WaitFor(() => Said(VoiceLine.Asm_Pick_Barrel) > picks + 1, 2f);
+            Check("v12-hear-again-B-button", Said(VoiceLine.Asm_Pick_Barrel) == picks + 2);
 
             yield return GrabAndRelease(R, P(GunPart.Barrel), S("Socket_Barrel"), Quaternion.Euler(0f, 0f, 40f), false);
             Check("vr-misaligned-rejected", !S("Socket_Barrel").IsFilled && hud.DirectiveText.Contains("MISALIGNED"), hud.DirectiveText);
@@ -454,6 +500,8 @@ namespace VRArmory.Tests
             Check("v11-target-guidance-on-grab", guide.CurrentPhase == VRGuidance.Phase.Place && guide.TargetSocket == barrelSocket && guide.GuideLineVisible
                                                  && menu.headlineText.text == VRTrainingText.Place(GunPart.Barrel),
                 $"phase={guide.CurrentPhase} target={guide.TargetSocket?.name} line={guide.GuideLineVisible} headline='{menu.headlineText.text}'");
+            yield return WaitFor(() => Said(VoiceLine.Asm_Place_Barrel) > 0, 2f);
+            Check("v12-place-instruction-spoken", Said(VoiceLine.Asm_Place_Barrel) == 1 && coach.CurrentCue == VRTrainingCoach.Cue.PlacePart, $"cue={coach.CurrentCue}");
             yield return CarryTo(R, barrel, () => new Pose(barrelSocket.transform.position + view.right * 0.10f, barrelSocket.transform.rotation), 0.3f);
             Check("v11-direction-move-left", guide.CurrentCorrection == VRGuidance.Correction.MoveLeft && menu.feedbackText.text == VRTrainingText.MoveLeft,
                 $"part 10 cm right of the seat -> {guide.CurrentCorrection}, shown {barrelSocket.LastDistance * 100f:0.0} cm away");
@@ -524,6 +572,11 @@ namespace VRArmory.Tests
             Check("vr-step-complete-message", hud.DirectiveText.Contains("COMPLETE"), hud.DirectiveText);
             Check("v11-seat-success-on-panel", menu.ShownFeedback == VRTrainingMenu.Feedback.Success && menu.feedbackText.text == VRTrainingText.Seated(GunPart.Barrel),
                 menu.feedbackText.text);
+            yield return WaitFor(() => Said(VoiceLine.Asm_Pick_Spring) > 0, 5f);
+            Check("v12-praise-then-next-instruction", Said(VoiceLine.Common_WellDone) == 1 && Said(VoiceLine.Asm_Pick_Spring) == 1
+                                                      && SaidAt(VoiceLine.Common_WellDone) < SaidAt(VoiceLine.Asm_Pick_Spring),
+                $"well done at {SaidAt(VoiceLine.Common_WellDone):0.0} s, next instruction at {SaidAt(VoiceLine.Asm_Pick_Spring):0.0} s");
+            Check("v12-no-repeat-on-regrab", Said(VoiceLine.Asm_Place_Barrel) == 1, $"the barrel was grabbed 5 times, its instruction spoken {Said(VoiceLine.Asm_Place_Barrel)} time(s)");
             R.grip = false;   // put the slide back
             yield return Hold(0.6f);
             Check("held-slide-returned-with-barrel", !slide.IsHeld && P(GunPart.Barrel).transform.parent == slide.transform);
@@ -568,6 +621,10 @@ namespace VRArmory.Tests
             AssemblyPart frame = P(GunPart.LowerFrame);
             Check("v11-fc-pick-up-pistol", guide.CurrentPhase == VRGuidance.Phase.PickUpPistol && guide.HighlightedPart == frame
                                            && menu.headlineText.text == VRTrainingText.PickUpPistol, $"phase={guide.CurrentPhase} headline='{menu.headlineText.text}'");
+            yield return WaitFor(() => Said(VoiceLine.FC_Intro) > 0, 5f);
+            Check("v12-assembled-then-function-check-intro", Said(VoiceLine.Asm_Complete) == 1 && Said(VoiceLine.FC_Intro) == 1
+                                                             && SaidAt(VoiceLine.Asm_Complete) < SaidAt(VoiceLine.FC_Intro) && Said(VoiceLine.Common_WellDone) == 3,
+                $"well done x{Said(VoiceLine.Common_WellDone)} (steps 1-3), assembled, then the function check");
 
             // ---- Function check with controllers
             yield return GrabAt(R, frame);
@@ -577,21 +634,108 @@ namespace VRArmory.Tests
             Check("v11-fc-tooltip-on-pistol-hand", guide.TooltipText == VRTrainingText.PressButton("A") && Vector3.Distance(guide.TooltipTransform.position, rightCtrl.position) < 0.15f
                                                   && menu.headlineText.text == VRTrainingText.StageTitle(0),
                 $"tooltip='{guide.TooltipText}' {Vector3.Distance(guide.TooltipTransform.position, rightCtrl.position) * 100f:0} cm from the right controller, headline='{menu.headlineText.text}'");
+            yield return WaitFor(() => Said(VoiceLine.FC_SafetyOn_A) > 0, 3f);
+            Check("v12-safety-instruction-names-A", Said(VoiceLine.FC_SafetyOn_A) == 1 && Said(VoiceLine.FC_SafetyOn_X) == 0, "pistol in the right hand");
             R.primary = true; yield return Frames(2); R.primary = false; yield return Frames(2);
             Check("fc1-safety-on-with-A", fc.SafetyOn && Check5() == "SafeTrigger", Check5());
+
+            // ---- v1.2: trigger demonstration. It starts with its "watch" line; the ghost cannot be touched and moves nothing real.
+            yield return WaitFor(() => ghost.Playing == VRGhostDemo.Demo.TriggerPull, 4f);
+            float lag = Mathf.Abs(GhostStartedAt(VRGhostDemo.Demo.TriggerPull) - SaidAt(VoiceLine.FC_TriggerDemo_Safe));
+            Check("v12-trigger-demo-starts-with-voice", ghost.Playing == VRGhostDemo.Demo.TriggerPull && Said(VoiceLine.FC_TriggerDemo_Safe) == 1 && lag < 0.05f,
+                $"ghost started {lag * 1000f:0} ms from the first word");
+            Transform realTrigger = fc.TriggerPiece;
+            Pose realTriggerRest = LocalPose(realTrigger);
+            yield return WaitFor(() => ghost.Travel > 0.5f, 3f);
+            Check("v12-ghost-trigger-inert", GhostIsInert(ghost.TriggerGhost) && ghost.TriggerGhost.parent == realTrigger.parent && fc.TriggerPull == 0f
+                                             && LocalPose(realTrigger) == realTriggerRest && ghost.GhostVisible,
+                $"ghost travel {ghost.Travel:0.00} while the real trigger stays at {fc.TriggerPull:0.00}");
+
+            // Put the pistol down in the middle of the demonstration, then pick it up again.
+            R.grip = false;
+            yield return WaitFor(() => Said(VoiceLine.FC_PickUpAgain) > 0, 3f);
+            Check("v12-putting-pistol-down-stops-demo", !ghost.IsPlaying && coach.CurrentCue == VRTrainingCoach.Cue.PickUpPistolAgain && Said(VoiceLine.FC_PickUpAgain) == 1,
+                $"cue={coach.CurrentCue} ghost={ghost.Playing}");
+            yield return Hold(0.6f); // back on the bench
+            yield return GrabAt(R, frame);
+            yield return LiftTo(R, frame, origin.transform.position + new Vector3(0.05f, 1.15f, 0.45f));
+            yield return WaitFor(() => Said(VoiceLine.FC_TriggerDemo_Safe) >= 2 && ghost.IsPlaying, 4f);
+            Check("v12-pick-up-again-resumes-demo", frame.IsHeld && Check5() == "SafeTrigger" && Said(VoiceLine.FC_TriggerDemo_Safe) == 2
+                                                    && ghost.Playing == VRGhostDemo.Demo.TriggerPull && Said(VoiceLine.FC_SafetyOn_A) == 1,
+                $"held={frame.IsHeld} check={Check5()} ghost={ghost.Playing}");
+
+            // The whole demonstration, then "now you try" - not before both the voice and the ghost have finished.
+            float triggerTravel = 0f;
+            Pose ghostTriggerFull = default;
+            yield return WaitFor(() =>
+            {
+                if (ghost.IsPlaying && ghost.Travel > triggerTravel) { triggerTravel = ghost.Travel; ghostTriggerFull = LocalPose(ghost.TriggerGhost); }
+                return Said(VoiceLine.FC_YourTurn_Trigger) > 0;
+            }, 20f);
+            float afterWatch = SaidAt(VoiceLine.FC_YourTurn_Trigger) - SaidAt(VoiceLine.FC_TriggerDemo_Safe);
+            Check("v12-try-prompt-after-demo", Said(VoiceLine.FC_YourTurn_Trigger) == 1 && !ghost.IsPlaying && triggerTravel >= 0.999f
+                                               && afterWatch >= voice.ClipFor(VoiceLine.FC_TriggerDemo_Safe).length,
+                $"prompt {afterWatch:0.0} s after the watch line ({voice.ClipFor(VoiceLine.FC_TriggerDemo_Safe).length:0.0} s long), ghost reached {triggerTravel:0.000}");
             R.triggerValue = 1f; yield return Hold(0.2f);
+            // The ghost's end pose must be exactly where the real trigger goes when it is pulled all the way.
+            Vector3 ghostTipWorld = realTrigger.parent.TransformPoint(ghostTriggerFull.position);
+            float triggerGap = Vector3.Distance(ghostTipWorld, realTrigger.position);
+            float triggerTurn = Quaternion.Angle(realTrigger.parent.rotation * ghostTriggerFull.rotation, realTrigger.rotation);
+            Check("v12-ghost-trigger-matches-real-pull", fc.TriggerPull >= 0.999f && triggerGap < 0.0002f && triggerTurn < 0.5f,
+                $"real trigger turned {Quaternion.Angle(realTriggerRest.rotation, realTrigger.localRotation):0.0} deg; ghost end pose off by {triggerGap * 1000f:0.00} mm / {triggerTurn:0.00} deg");
             Check("v11-fc-release-prompt", menu.headlineText.text == VRTrainingText.ReleaseTrigger && guide.TooltipText == VRTrainingText.LetGo, menu.headlineText.text);
+            yield return WaitFor(() => Said(VoiceLine.FC_LetGo) > 0, 6f);
+            Check("v12-confirmation-then-instruction", Said(VoiceLine.FC_SafeOk) == 1 && Said(VoiceLine.FC_LetGo) == 1 && SaidAt(VoiceLine.FC_SafeOk) < SaidAt(VoiceLine.FC_LetGo));
             R.triggerValue = 0f; yield return Hold(0.2f);
             Check("fc2-safe-trigger", Check5() == "SafeOff", Check5());
             R.primary = true; yield return Frames(2); R.primary = false; yield return Frames(2);
             Check("fc3-safety-off", !fc.SafetyOn && Check5() == "DoubleAction", Check5());
             Transform hammerT = (Transform)Priv(Priv(fc, "hammer"), "t");
             Quaternion hammerRest = hammerT.localRotation;
+            // v1.2: the trainee starts pulling while the demonstration is still running: it stops, and is not asked again.
+            yield return WaitFor(() => ghost.Playing == VRGhostDemo.Demo.TriggerPull && Said(VoiceLine.FC_TriggerDemo_Fire) > 0, 6f);
+            bool demoWasRunning = ghost.Playing == VRGhostDemo.Demo.TriggerPull;
+            int tryPrompts = Said(VoiceLine.FC_YourTurn_Trigger);
             R.triggerValue = 0.6f; yield return Hold(0.15f);
+            Check("v12-trainee-action-stops-demo", demoWasRunning && !ghost.IsPlaying && !coach.DemoPending, $"demo was running={demoWasRunning}, now={ghost.Playing}");
             float hammerTravel = Quaternion.Angle(hammerRest, hammerT.localRotation);
             R.triggerValue = 1f; yield return Hold(0.2f);
             Check("fc4-double-action", Check5() == "RackHeld", $"{Check5()}, hammer drew back {hammerTravel:0.0} deg at 60% pull");
             Check("v11-fc-rack-hint", guide.RackHintVisible && menu.headlineText.text == VRTrainingText.StageTitle(4), menu.headlineText.text);
+
+            // ---- v1.2: slide demonstration, after "Click. The hammer dropped." and "Keep holding the trigger back."
+            yield return WaitFor(() => ghost.Playing == VRGhostDemo.Demo.SlideRack, 10f);
+            Check("v12-slide-demo-after-confirmation", ghost.Playing == VRGhostDemo.Demo.SlideRack
+                                                       && SaidAt(VoiceLine.FC_HammerDropped) < SaidAt(VoiceLine.FC_KeepHolding) && SaidAt(VoiceLine.FC_KeepHolding) < SaidAt(VoiceLine.FC_SlideDemo)
+                                                       && Mathf.Abs(GhostStartedAt(VRGhostDemo.Demo.SlideRack) - SaidAt(VoiceLine.FC_SlideDemo)) < 0.05f
+                                                       && Said(VoiceLine.FC_YourTurn_Trigger) == tryPrompts,
+                $"ghost={ghost.Playing}, try-prompts {Said(VoiceLine.FC_YourTurn_Trigger)} (was {tryPrompts})");
+            Transform slideGhost = ghost.SlideGhost;
+            string[] ghostPieces = Array.ConvertAll(slideGhost.GetComponentsInChildren<MeshRenderer>(true), r => r.name);
+            Check("v12-slide-ghost-is-slide-only", GhostIsInert(slideGhost) && ghostPieces.Length == 6
+                                                   && !Array.Exists(ghostPieces, n => n.Contains("Barrel") || n.Contains("Spring") || n.Contains("Locking")),
+                string.Join(",", ghostPieces));
+            Vector3 realSlideRest = fc.SlidePiece.localPosition;
+            Vector3 ghostSlideBack = Vector3.zero;
+            yield return WaitFor(() =>
+            {
+                if (ghost.Travel >= 0.999f) ghostSlideBack = slideGhost.localPosition;
+                return ghost.Travel >= 0.999f;
+            }, 4f);
+            Vector3 slideOffset = slideGhost.position - fc.SlidePiece.position;
+            Check("v12-ghost-slide-travel", Mathf.Abs(slideOffset.magnitude - fc.slideTravel) < 0.0005f && Vector3.Dot(slideOffset.normalized, fc.SlideRearDirection.normalized) > 0.999f
+                                            && fc.SlideAmount == 0f && fc.SlidePiece.localPosition == realSlideRest,
+                $"ghost {slideOffset.magnitude * 1000f:0.0} mm towards the rear (slideTravel {fc.slideTravel * 1000f:0.0} mm); real slide amount {fc.SlideAmount}");
+
+            // B on the pistol hand during the demonstration: shown and explained again, without repeating the praise.
+            int slideDemos = GhostStarts(VRGhostDemo.Demo.SlideRack);
+            yield return PressSecondary(R);
+            yield return WaitFor(() => GhostStarts(VRGhostDemo.Demo.SlideRack) > slideDemos, 6f);
+            Check("v12-B-replays-demo", GhostStarts(VRGhostDemo.Demo.SlideRack) == slideDemos + 1 && Said(VoiceLine.FC_SlideDemo) == 2
+                                        && Said(VoiceLine.FC_HammerDropped) == 1 && Check5() == "RackHeld" && fc.TriggerPull > 0.8f,
+                $"slide demos {GhostStarts(VRGhostDemo.Demo.SlideRack)}, check={Check5()}");
+            yield return WaitFor(() => Said(VoiceLine.FC_YourTurn_Rack) > 0, 20f);
+            Check("v12-rack-prompt-after-demo", Said(VoiceLine.FC_YourTurn_Rack) == 1 && !ghost.IsPlaying && Check5() == "RackHeld");
 
             // Rack: the left hand grips the rear of the slide and pulls back while the trigger stays held.
             Transform grip = frame.transform.Find("VR_Slide_Rack_Grip");
@@ -607,9 +751,26 @@ namespace VRArmory.Tests
                 yield return Frames(1);
             }
             Check("slide-follows-hand", fc.SlideAmount > 0.95f, $"slide amount = {fc.SlideAmount:0.00}");
+            float slideGap = Vector3.Distance(fc.SlidePiece.parent.TransformPoint(ghostSlideBack), fc.SlidePiece.position);
+            Check("v12-ghost-slide-matches-real-rack", fc.SlideAmount >= 0.999f && slideGap < 0.0002f,
+                $"real slide fully back; the ghost's end position is {slideGap * 1000f:0.00} mm from it");
             L.grip = false;
             yield return Hold(0.3f);
             Check("fc5-rack-with-trigger-held", Check5() == "Reset" && fc.SlideAmount == 0f, Check5());
+
+            // ---- v1.2: slow-release demonstration, from the full pull the trainee is holding to the reset click
+            yield return WaitFor(() => ghost.Playing == VRGhostDemo.Demo.TriggerRelease, 5f);
+            float releaseStart = ghost.Travel, releaseEnd = 1f;
+            Check("v12-release-demo-from-full-pull", ghost.Playing == VRGhostDemo.Demo.TriggerRelease && releaseStart > 0.999f && Said(VoiceLine.Common_Good) == 1,
+                $"ghost starts at {releaseStart:0.000}");
+            yield return WaitFor(() =>
+            {
+                if (ghost.IsPlaying) releaseEnd = Mathf.Min(releaseEnd, ghost.Travel);
+                return Said(VoiceLine.FC_YourTurn_Release) > 0;
+            }, 15f);
+            Check("v12-release-demo-stops-at-reset-point", Mathf.Abs(releaseEnd - FunctionCheck.TriggerResetPoint) < 0.001f && Said(VoiceLine.FC_YourTurn_Release) == 1
+                                                           && Check5() == "Reset" && fc.TriggerPull >= 0.999f,
+                $"ghost let out to {releaseEnd:0.000} (reset point {FunctionCheck.TriggerResetPoint}); the real trigger is still held at {fc.TriggerPull:0.00}");
             R.triggerValue = 0.5f; yield return Hold(0.15f);
             R.triggerValue = 0f; yield return Hold(0.15f);
             Check("fc6-trigger-reset", Check5() == "SingleAction", Check5());
@@ -618,6 +779,12 @@ namespace VRArmory.Tests
             Check("v11-fc-passed-on-panel", menu.headlineText.text == VRTrainingText.CheckPassed, menu.headlineText.text);
             R.triggerValue = 0f; R.grip = false;
             yield return Hold(2.0f);
+            yield return WaitFor(() => Said(VoiceLine.Training_Complete) > 0, 6f);
+            Check("v12-passed-and-complete-spoken", Said(VoiceLine.FC_ResetClick) == 1 && Said(VoiceLine.FC_Passed) == 1 && Said(VoiceLine.Training_Complete) == 1
+                                                    && SaidAt(VoiceLine.FC_Passed) < SaidAt(VoiceLine.Training_Complete) && !ghost.IsPlaying && !ghost.GhostVisible,
+                $"passed at {SaidAt(VoiceLine.FC_Passed):0.0} s, complete at {SaidAt(VoiceLine.Training_Complete):0.0} s");
+            Check("v12-voice-never-overlaps", maxVoicesAtOnce == 1, $"most voice clips audible in one frame = {maxVoicesAtOnce} (all AudioSources in the scene checked every frame)");
+            Check("v12-no-missing-clip-warnings", missingClipWarnings == 0, $"warnings = {missingClipWarnings}");
             Check("mistakes-count-only-real-attempts", mgr.MistakeCount == 2, $"mistakes={mgr.MistakeCount} (2 deliberate: out of sequence + misaligned)");
             Check("completion-screen", mgr.IsComplete && menu.completePanel.activeSelf && menu.resultText.text.Contains("TIME"), menu.resultText.text.Replace("\n", " / "));
             Check("hud-final-message", hud.DirectiveText.StartsWith("ALL STEPS COMPLETE"), hud.DirectiveText);
@@ -657,12 +824,97 @@ namespace VRArmory.Tests
             Check("v11-restart-from-training", menu.progressPanel.activeSelf && mgr.HasStarted && mgr.CurrentStepIndex == 0 && !S("Socket_Barrel").IsFilled,
                 $"step={mgr.CurrentStepIndex}");
 
+            // ---- v1.2: a line without a recording is "spoken" silently for about as long as it would take; nothing breaks
+            voice = FindObjectOfType<VRVoiceGuide>(); // the reloaded scene's
+            VoiceClip entry = Array.Find(voice.clips, c => c.line == VoiceLine.FC_LetGo);
+            AudioClip recording = entry.clip;
+            entry.clip = null;
+            int warningsBefore = missingClipWarnings;
+            voice.Stop();
+            yield return Hold(0.6f);
+            voice.Play(VoiceLine.FC_LetGo);
+            yield return Hold(0.5f);
+            bool silentButSpeaking = voice.Current == VoiceLine.FC_LetGo && !voice.GetComponent<AudioSource>().isPlaying;
+            yield return WaitFor(() => voice.Current != VoiceLine.FC_LetGo, 6f);
+            Check("v12-missing-clip-is-graceful", silentButSpeaking && voice.Current != VoiceLine.FC_LetGo && missingClipWarnings == warningsBefore + 1,
+                $"silent stand-in ran={silentButSpeaking}, warnings +{missingClipWarnings - warningsBefore}");
+            entry.clip = recording;
+
             InputSystem.RemoveDevice(left);
             InputSystem.RemoveDevice(right);
             InputSystem.RemoveDevice(hmd);
         }
 
         VRGuidance guide;
+
+        // ------------------------------------------------------------------ v1.2: voice + ghost helpers
+
+        VRTrainingCoach coach;
+        VRVoiceGuide voice;
+        VRGhostDemo ghost;
+        readonly List<VoiceLine> spoken = new List<VoiceLine>();
+        readonly List<(VoiceLine line, float time)> spokenAt = new List<(VoiceLine, float)>();
+        readonly List<(VRGhostDemo.Demo demo, float time)> ghostStarts = new List<(VRGhostDemo.Demo, float)>();
+        int maxVoicesAtOnce;
+        int missingClipWarnings;
+
+        // Finds the v1.2 objects (again after a scene reload) and records every spoken line and ghost start.
+        void HookCoach()
+        {
+            coach = FindObjectOfType<VRTrainingCoach>();
+            voice = FindObjectOfType<VRVoiceGuide>();
+            ghost = FindObjectOfType<VRGhostDemo>();
+            if (voice != null) voice.LineStarted += l => { spoken.Add(l); spokenAt.Add((l, Time.time)); };
+            if (ghost != null) ghost.Started += d => ghostStarts.Add((d, Time.time));
+        }
+
+        int Said(VoiceLine l) => spoken.FindAll(x => x == l).Count;
+        float SaidAt(VoiceLine l) { int i = spokenAt.FindLastIndex(x => x.line == l); return i < 0 ? -1f : spokenAt[i].time; }
+        int GhostStarts(VRGhostDemo.Demo d) => ghostStarts.FindAll(x => x.demo == d).Count;
+        float GhostStartedAt(VRGhostDemo.Demo d) { int i = ghostStarts.FindLastIndex(x => x.demo == d); return i < 0 ? -1f : ghostStarts[i].time; }
+
+        // Independent of VRVoiceGuide: counts every AudioSource in the scene that is playing a voice clip, each frame.
+        IEnumerator VoiceOverlapMonitor()
+        {
+            while (true)
+            {
+                int n = 0;
+                foreach (AudioSource s in FindObjectsOfType<AudioSource>())
+                    if (s.isPlaying && s.clip != null && s.clip.name.StartsWith("VO_")) n++;
+                maxVoicesAtOnce = Mathf.Max(maxVoicesAtOnce, n);
+                yield return null;
+            }
+        }
+
+        // Keeps both simulated hands where they are (still holding) until 'condition' is true or 'timeout' passes.
+        IEnumerator WaitFor(Func<bool> condition, float timeout)
+        {
+            for (float t = 0f; t < timeout && !condition(); t += Time.deltaTime)
+            {
+                Send(L); Send(R);
+                yield return null;
+            }
+        }
+
+        // Presses B (right) or Y (left) for a moment.
+        IEnumerator PressSecondary(Hand h)
+        {
+            h.secondary = true;
+            yield return Frames(2);
+            h.secondary = false;
+            yield return Frames(2);
+        }
+
+        static bool GhostIsInert(Transform root)
+        {
+            if (root == null || root.GetComponent<GhostVisual>() == null) return false;
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                if (t.gameObject.layer != 2 || t.GetComponent<Collider>() != null || t.GetComponent<XRBaseInteractable>() != null
+                    || t.GetComponent<AssemblyPart>() != null || t.GetComponent<Rigidbody>() != null) return false;
+            return true;
+        }
+
+        static Pose LocalPose(Transform t) => new Pose(t.localPosition, t.localRotation);
 
         static Pose SeatPose(SnapSocket s) => new Pose(s.transform.position, s.transform.rotation);
 

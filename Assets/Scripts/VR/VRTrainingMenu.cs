@@ -43,6 +43,8 @@ namespace VRArmory
         public Text feedbackText;
         public Image[] progressSegments;
         public Button restartButton;
+        [Tooltip("Plays the current spoken instruction (and its demonstration) again. Wired by VRTrainingCoach.")]
+        public Button repeatButton;
 
         [Header("Complete")]
         public Text resultText;

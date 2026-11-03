@@ -23,6 +23,7 @@ namespace VRArmory.Editor
         const string ContentName = "VR_Content";
         const string SetupPrefabPath = "Assets/Samples/XR Interaction Toolkit/2.6.4/Starter Assets/Prefabs/XR Interaction Setup.prefab";
         const string GuideMaterialPath = "Assets/Materials/VR/VR_Guide_Line.mat";
+        const string GhostMaterialPath = "Assets/Materials/VR/VR_Ghost_Demo.mat";
         const float WalkSpeed = 1.6f;  // m/s, normal walking pace
         const float TurnSpeed = 75f;   // deg/s
 
@@ -159,6 +160,28 @@ namespace VRArmory.Editor
 
             VRTrainingMenu menu = BuildMenu(content, manager, functionCheck, guidance, xrCamera);
 
+            // v1.2: ghost demonstrations of the slide / trigger movements, and the spoken instructor.
+            VRGhostDemo ghostDemo = GetOrAdd<VRGhostDemo>(FindOrCreate(content, "VR_Ghost_Demo"));
+            ghostDemo.functionCheck = functionCheck;
+            ghostDemo.ghostMaterial = GetOrCreateGhostMaterial();
+            ghostDemo.lineMaterial = guidance.lineMaterial;
+
+            GameObject voiceObject = FindOrCreate(content, "VR_Voice_Guide");
+            VRVoiceGuide voice = GetOrAdd<VRVoiceGuide>(voiceObject); // adds its AudioSource
+            voiceObject.GetComponent<AudioSource>().playOnAwake = false;
+            voice.clips = VRVoiceSetup.LoadClips(out List<VoiceLine> missingVoice);
+            if (missingVoice.Count > 0)
+                Debug.LogWarning($"[VR Armory] {missingVoice.Count} voice line(s) have no recording yet (they play silently): {string.Join(", ", missingVoice)}");
+
+            VRTrainingCoach coach = GetOrAdd<VRTrainingCoach>(FindOrCreate(content, "VR_Training_Coach"));
+            coach.manager = manager;
+            coach.functionCheck = functionCheck;
+            coach.functionCheckControls = fcControls;
+            coach.guidance = guidance;
+            coach.menu = menu;
+            coach.voice = voice;
+            coach.ghost = ghostDemo;
+
             QuestPerformanceSettings perf = GetOrAdd<QuestPerformanceSettings>(FindOrCreate(content, "Quest_Performance"));
             perf.keepShadows = FindLights("Directional Light", "Workbench_Ceiling_Light");
 
@@ -173,9 +196,10 @@ namespace VRArmory.Editor
             platformSwitch.interactionManager = interactionManager;
             platformSwitch.partGrabs = grabs.ToArray();
 
-            foreach (Object o in new Object[] { menu, guidance, fcControls, perf, audio, platformSwitch }) EditorUtility.SetDirty(o);
+            foreach (Object o in new Object[] { menu, guidance, fcControls, ghostDemo, voice, coach, perf, audio, platformSwitch }) EditorUtility.SetDirty(o);
             content.gameObject.SetActive(false); // desktop mode never sees the VR objects
-            Debug.Log($"[VR Armory] VR scene setup done: {grabs.Count} grabbable parts, XR rig at {BenchStandPoint}, training panel, guidance, smooth locomotion, moving targets, function-check controls.");
+            Debug.Log($"[VR Armory] VR scene setup done: {grabs.Count} grabbable parts, XR rig at {BenchStandPoint}, training panel, guidance, smooth locomotion, moving targets, function-check controls, "
+                      + $"ghost demonstrations, voice guide ({voice.clips.Length - missingVoice.Count}/{voice.clips.Length} lines recorded).");
             return true;
         }
 
@@ -227,6 +251,17 @@ namespace VRArmory.Editor
             if (!AssetDatabase.IsValidFolder("Assets/Materials/VR")) AssetDatabase.CreateFolder("Assets/Materials", "VR");
             m = new Material(Shader.Find("Sprites/Default")) { color = Color.white }; // unlit, vertex colour + alpha
             AssetDatabase.CreateAsset(m, GuideMaterialPath);
+            return m;
+        }
+
+        // A saved material, so the GhostDemo shader is included in the Quest build (Shader.Find alone would not be).
+        static Material GetOrCreateGhostMaterial()
+        {
+            Material m = AssetDatabase.LoadAssetAtPath<Material>(GhostMaterialPath);
+            if (m != null) return m;
+            if (!AssetDatabase.IsValidFolder("Assets/Materials/VR")) AssetDatabase.CreateFolder("Assets/Materials", "VR");
+            m = new Material(Shader.Find("VRArmory/GhostDemo"));
+            AssetDatabase.CreateAsset(m, GhostMaterialPath);
             return m;
         }
 
@@ -313,7 +348,7 @@ namespace VRArmory.Editor
                 Label(chip.transform, "Text", rows[i].chip, 18, Accent, Vector2.zero, new Vector2(172f, 48f), TextAnchor.MiddleCenter, FontStyle.Bold);
                 Label(p, "Use_" + rows[i].chip, rows[i].use, 25, TextPrimary, new Vector2(-352f + 196f + 254f, y), new Vector2(508f, 48f), TextAnchor.MiddleLeft);
             }
-            Left(p, "Hint", VRTrainingText.IntroHint, 21, Accent, -118f, FontStyle.Normal);
+            Left(p, "Hint", VRTrainingText.IntroHint, 21, Accent, -116f, FontStyle.Normal, 60f); // two lines
 
             menu.introBackButton = MakeButton(p, "Back_Button", VRTrainingText.Back, new Vector2(-352f + 90f, -182f), new Vector2(180f, 64f), false);
             menu.startButton = MakeButton(p, "Start_Button", VRTrainingText.StartTraining, new Vector2(352f - 140f, -182f), new Vector2(280f, 64f), true);
@@ -344,6 +379,8 @@ namespace VRArmory.Editor
             menu.feedbackText = Label(menu.feedbackPill.transform, "Text", "", 27, Accent, new Vector2(30f, 0f), new Vector2(ContentW - 100f, 60f), TextAnchor.MiddleLeft, FontStyle.Bold);
 
             menu.restartButton = MakeButton(p, "Restart_Button", VRTrainingText.Restart, new Vector2(352f - 80f, -186f), new Vector2(160f, 52f), false);
+            // Left of Restart: hear the current instruction (and see its demonstration) again.
+            menu.repeatButton = MakeButton(p, "Repeat_Button", VRTrainingText.Repeat, new Vector2(352f - 160f - 12f - 100f, -186f), new Vector2(200f, 52f), false);
         }
 
         static void BuildComplete(Transform root, VRTrainingMenu menu)

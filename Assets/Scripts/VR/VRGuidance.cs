@@ -465,7 +465,7 @@ namespace VRArmory
             label.background.rectTransform.sizeDelta = new Vector2(label.text.preferredWidth + 44f, 58f);
         }
 
-        // ---------- Part geometry (gun meshes only: socket ghosts are children of their host and are skipped) ----------
+        // ---------- Part geometry (gun meshes only: socket ghosts and demonstration ghosts are skipped) ----------
 
         private Renderer[] RenderersOf(AssemblyPart part)
         {
@@ -475,7 +475,8 @@ namespace VRArmory
             var list = new List<Renderer>();
             foreach (Renderer r in part.GetComponentsInChildren<Renderer>())
             {
-                if (r.GetComponentInParent<SnapSocket>() == null) list.Add(r);
+                // Demonstration ghosts move away from the gun, so they must not stretch its bounds.
+                if (r.GetComponentInParent<SnapSocket>() == null && r.GetComponentInParent<GhostVisual>() == null) list.Add(r);
             }
             rs = list.ToArray();
             partRenderers[part] = rs;

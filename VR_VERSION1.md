@@ -27,6 +27,14 @@ Desktop mode is unchanged.
 
 Small additive API changes (desktop behaviour unchanged): `AssemblyPart.SetHighlight(float)`, `SnapSocket.amberWhenMisaligned` / `faintAlphaBoost` / `showInsertionPath`, `FunctionCheck.Stage` / `SafeTriggerPulled` / `Notified`, `ProceduralAudio.MakeChime`.
 
+## Version 1.2 – ghost demonstrations and voice guidance
+
+Version 1.2 (branch `feature/vr-ghost-animation-voice-guidance`) adds a spoken instructor (38 recorded lines, one
+short instruction at a time) and see-through ghost demonstrations of the slide and trigger movements in the function
+check. The ghost shows the movement first, then the trainee is asked to do it; the real action is still checked by
+`FunctionCheck`. B / Y or **Hear again** on the panel repeats the current instruction. VR only; desktop unchanged.
+Full description, architecture and how-tos: **[VR_GUIDANCE.md](VR_GUIDANCE.md)**.
+
 ## Technical configuration
 
 | Item | Value |
@@ -51,6 +59,9 @@ VR_Version1                      VRPlatformSwitch (desktop or VR)
     ├── Bench_Teleport_Anchor    green disc: teleport here to stand at the bench
     ├── VR_Training_Menu         the one world-space panel in front of the bench (modules / briefing / training / complete)
     ├── VR_Guidance              in-world hints + adds VRPlacementAssist to the parts at runtime (v1.1)
+    ├── VR_Ghost_Demo            slide / trigger ghost demonstrations (v1.2)
+    ├── VR_Voice_Guide           the instructor's voice: recorded lines, one AudioSource (v1.2)
+    ├── VR_Training_Coach        decides what is said and shown, keeps voice and ghost in step (v1.2)
     ├── VR_Function_Check_Controls
     └── Quest_Performance        turns off shadows on all lights except the bench lamp and sun (VR only)
 ```
@@ -70,7 +81,10 @@ New (`Assets/Scripts/VR/`):
 | `VRTrainingMenu` | The one VR panel: module selection, Coming Soon, briefing, training instructions, completion. Restart / Train again = scene reload; Back to modules does not reload |
 | `VRGuidance` (1.1) | Highlight, marker, target line, direction / rotation hints, function-check tooltips, success rings |
 | `VRPlacementAssist` (1.1) | Magnetic pull near the active socket + click-in when Valid (validation stays in `SnapSocket`) |
-| `VRTrainingText` (1.1) | All trainee-facing sentences |
+| `VRTrainingText` (1.1) | All trainee-facing sentences (v1.2: also the spoken lines) |
+| `VRTrainingCoach` (1.2) | The instructor: what to say and which demonstration to show, Hear again, reminders |
+| `VRVoiceGuide` (1.2) | Plays the recorded voice lines, one at a time |
+| `VRGhostDemo`, `GhostVisual` (1.2) | Ghost copies of the slide / trigger that demonstrate the movement |
 | `QuestPerformanceSettings` | Shadow budget for Quest |
 
 New (`Assets/Scripts/Assembly/`): `AssemblyFeedbackAudio`, `ProceduralAudio` (synthesized sounds, moved out of `FunctionCheck`).
@@ -90,8 +104,9 @@ Changed teammate scripts (small, behaviour-preserving):
 
 1. **Configure Project for Quest 3S** – all settings in the table above. Safe to re-run.
 2. **Setup VR Scene (additive)** – creates or updates `VR_Version1`. Safe to re-run.
-3. **Build Quest APK** – `Builds/Android/GunAssemblyVR_v1_1.apk`.
+3. **Build Quest APK** – `Builds/Android/GunAssemblyVR_v1_2.apk` (earlier versions keep their own file names).
 - **Run Self-Test (Desktop Mode)** / **(VR Rig, Simulated Controllers)** – automated Play Mode tests; results in the Console as `SELFTEST|...` lines.
+- **Export Voice Script** (v1.2) – writes `Tools/VoiceGeneration/voice_script.tsv`, the words each voice clip is recorded from.
 
 Order of the older builders on a fresh scene (each now asks first):
 Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire Range → Setup Phase 02 Assembly → Re-Stage Gun Parts → VR / Setup VR Scene.
@@ -112,6 +127,7 @@ Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire 
 | Function check: index trigger (hand holding the pistol) | Squeeze the trigger (analog) |
 | Function check: A / X (same hand) | Safety on / off |
 | Function check: other hand grips the rear of the slide, pulls back, lets go | Rack the slide |
+| B / Y (either hand), or **Hear again** on the panel | Repeat the current spoken instruction and its demonstration (v1.2) |
 
 ## Continuing development (teammate notes)
 
@@ -133,3 +149,4 @@ Setup Workbench and Gun Parts → Build Armory Set Dressing → Build Live-Fire 
 - The shooting range has moving targets (`RangeTargetMover`, both modes) but no weapon yet; in VR it is announced as "Coming Soon".
 - Walking and turning pause while that hand holds a part with its ray (Starter Assets behaviour). Near grabs are not affected.
 - Version 1.1 UX (guidance, assist, module menu) is VR-only; the desktop prototype keeps its original HUD.
+- Version 1.2 voice and ghost demonstrations are VR-only too. The voice is a natural-sounding synthetic voice made offline, not a person; see [VR_GUIDANCE.md](VR_GUIDANCE.md).

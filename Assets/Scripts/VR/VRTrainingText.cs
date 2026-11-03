@@ -34,11 +34,12 @@ namespace VRArmory
         public const string TriggerUse = "Pull to press buttons";
         public const string StickChip = "THUMBSTICK";
         public const string StickUse = "Left stick to walk, right stick to turn";
-        public const string IntroHint = "Glowing parts and outlines always show you what to do next.";
+        public const string IntroHint = "Glowing parts and outlines always show you what to do next.\nMissed an instruction? Press B or Y to hear it again.";
         public const string StartTraining = "Start training";
 
         // ---------- Training ----------
         public const string Restart = "Restart";
+        public const string Repeat = "Hear again";
         public static string StepLabel(int index, int count, string name) => $"STEP {index + 1} OF {count}  ·  {name.ToUpperInvariant()}";
 
         public static string PartName(GunPart part)
@@ -167,6 +168,58 @@ namespace VRArmory
             $"<color=#8FA3B8>TIME</color>  {seconds / 60:00}:{seconds % 60:00}          <color=#8FA3B8>MISTAKES</color>  {mistakes}";
         public const string TrainAgain = "Train again";
         public const string BackToModules = "Back to modules";
+
+        // ---------- Spoken (VRVoiceGuide) ----------
+        // What the voice says. The recordings (Assets/Audio/Voice/VO_<line>.wav) are made from exactly these words;
+        // after changing one, record or generate that clip again (see VR_GUIDANCE.md). One action per line, plain words,
+        // commas where the speaker should take a breath.
+        public static string Spoken(VoiceLine line)
+        {
+            switch (line)
+            {
+                case VoiceLine.Intro_ChooseModule: return "Welcome. To begin, point your controller at Gun Assembly, and pull the trigger.";
+                case VoiceLine.Intro_Briefing: return "In this training, you will put a pistol together, and then check that it works. When you are ready, point at Start training, and pull the trigger.";
+                case VoiceLine.Common_WellDone: return "Well done.";
+                case VoiceLine.Common_Good: return "Good.";
+
+                case VoiceLine.Asm_Pick_Barrel: return "First, pick up the glowing barrel. Reach out, and squeeze the grip button on the side of your controller.";
+                case VoiceLine.Asm_Place_Barrel: return "Now put the barrel into the slide. Move it to the glowing outline, and it will click into place.";
+                case VoiceLine.Asm_Pick_Spring: return "Next, pick up the recoil spring.";
+                case VoiceLine.Asm_Place_Spring: return "Slide the spring in, just under the barrel.";
+                case VoiceLine.Asm_Pick_Slide: return "Next, pick up the slide.";
+                case VoiceLine.Asm_Place_Slide: return "Now put the slide onto the frame. You can use both hands to turn it.";
+                case VoiceLine.Asm_Pick_Magazine: return "Next, pick up the magazine.";
+                case VoiceLine.Asm_Place_Magazine: return "Push the magazine up, into the grip.";
+                case VoiceLine.Asm_TryAgain: return "Not quite. The part went back to the bench. Pick up the glowing part, and try again.";
+                case VoiceLine.Asm_Complete: return "The pistol is assembled.";
+
+                case VoiceLine.FC_Intro: return "Now, let's check that it works. Pick up the pistol by its grip.";
+                case VoiceLine.FC_PickUpAgain: return "Pick the pistol back up by its grip, and we will carry on.";
+                case VoiceLine.FC_SafetyOn_A: return "First, turn the safety on. Press the A button, on the hand holding the pistol.";
+                case VoiceLine.FC_SafetyOn_X: return "First, turn the safety on. Press the X button, on the hand holding the pistol.";
+                case VoiceLine.FC_TriggerDemo_Safe: return "The safety is on. Watch the glowing trigger. It moves all the way back, and then forward again.";
+                case VoiceLine.FC_YourTurn_Trigger: return "Now you try. Pull the trigger all the way back.";
+                case VoiceLine.FC_SafeOk: return "Good. The hammer did not move.";
+                case VoiceLine.FC_LetGo: return "Now let go of the trigger.";
+                case VoiceLine.FC_SafetyOff_A: return "Now turn the safety off. Press A again.";
+                case VoiceLine.FC_SafetyOff_X: return "Now turn the safety off. Press X again.";
+                case VoiceLine.FC_TriggerDemo_Fire: return "Watch the trigger once more. This time, the hammer will drop.";
+                case VoiceLine.FC_HammerDropped: return "Click. The hammer dropped.";
+                case VoiceLine.FC_KeepHolding: return "Keep holding the trigger back.";
+                case VoiceLine.FC_SlideDemo: return "Now watch the glowing slide. It moves all the way back, then springs forward.";
+                case VoiceLine.FC_YourTurn_Rack: return "With your other hand, grab the back of the slide. Pull it back, then let go.";
+                case VoiceLine.FC_HoldWhileRacking: return "Keep the trigger pulled while you pull the slide. Let's try that again.";
+                case VoiceLine.FC_ReleasedTooEarly: return "You let go of the trigger too early. Pull it, hold it, and pull the slide again.";
+                case VoiceLine.FC_ReleaseDemo: return "Watch the trigger. It moves forward slowly, and stops at a click.";
+                case VoiceLine.FC_YourTurn_Release: return "Now you try. Let the trigger out slowly, and stop when you hear the click.";
+                case VoiceLine.FC_ResetClick: return "That click means the trigger has reset.";
+                case VoiceLine.FC_TriggerDemo_Last: return "Watch the trigger one last time.";
+                case VoiceLine.FC_YourTurn_Last: return "Now pull the trigger all the way, one last time.";
+                case VoiceLine.FC_Passed: return "Well done. The pistol works correctly.";
+                case VoiceLine.Training_Complete: return "Your training is complete. You can train again, or go back to the modules.";
+                default: return "";
+            }
+        }
 
         static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
     }

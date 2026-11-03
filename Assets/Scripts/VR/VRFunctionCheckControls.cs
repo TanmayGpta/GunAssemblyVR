@@ -27,6 +27,9 @@ namespace VRArmory
         [Range(0f, 1f)] public float hammerHaptic = 0.8f;
         [Range(0f, 1f)] public float safetyHaptic = 0.3f;
 
+        // The other hand is holding the rear of the slide (racking has started).
+        public bool RackGripHeld => rackGrip != null && rackGrip.isSelected;
+
         private InputAction leftPrimary, rightPrimary;
         private XRSimpleInteractable rackGrip;
         private Vector3 rackStartPoint;      // where the rack hand grabbed, in frame space

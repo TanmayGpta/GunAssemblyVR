@@ -1,0 +1,39 @@
+file	line	text
+VO_Intro_ChooseModule.wav	Intro_ChooseModule	Welcome. To begin, point your controller at Gun Assembly, and pull the trigger.
+VO_Intro_Briefing.wav	Intro_Briefing	In this training, you will put a pistol together, and then check that it works. When you are ready, point at Start training, and pull the trigger.
+VO_Common_WellDone.wav	Common_WellDone	Well done.
+VO_Common_Good.wav	Common_Good	Good.
+VO_Asm_Pick_Barrel.wav	Asm_Pick_Barrel	First, pick up the glowing barrel. Reach out, and squeeze the grip button on the side of your controller.
+VO_Asm_Place_Barrel.wav	Asm_Place_Barrel	Now put the barrel into the slide. Move it to the glowing outline, and it will click into place.
+VO_Asm_Pick_Spring.wav	Asm_Pick_Spring	Next, pick up the recoil spring.
+VO_Asm_Place_Spring.wav	Asm_Place_Spring	Slide the spring in, just under the barrel.
+VO_Asm_Pick_Slide.wav	Asm_Pick_Slide	Next, pick up the slide.
+VO_Asm_Place_Slide.wav	Asm_Place_Slide	Now put the slide onto the frame. You can use both hands to turn it.
+VO_Asm_Pick_Magazine.wav	Asm_Pick_Magazine	Next, pick up the magazine.
+VO_Asm_Place_Magazine.wav	Asm_Place_Magazine	Push the magazine up, into the grip.
+VO_Asm_TryAgain.wav	Asm_TryAgain	Not quite. The part went back to the bench. Pick up the glowing part, and try again.
+VO_Asm_Complete.wav	Asm_Complete	The pistol is assembled.
+VO_FC_Intro.wav	FC_Intro	Now, let's check that it works. Pick up the pistol by its grip.
+VO_FC_PickUpAgain.wav	FC_PickUpAgain	Pick the pistol back up by its grip, and we will carry on.
+VO_FC_SafetyOn_A.wav	FC_SafetyOn_A	First, turn the safety on. Press the A button, on the hand holding the pistol.
+VO_FC_SafetyOn_X.wav	FC_SafetyOn_X	First, turn the safety on. Press the X button, on the hand holding the pistol.
+VO_FC_TriggerDemo_Safe.wav	FC_TriggerDemo_Safe	The safety is on. Watch the glowing trigger. It moves all the way back, and then forward again.
+VO_FC_YourTurn_Trigger.wav	FC_YourTurn_Trigger	Now you try. Pull the trigger all the way back.
+VO_FC_SafeOk.wav	FC_SafeOk	Good. The hammer did not move.
+VO_FC_LetGo.wav	FC_LetGo	Now let go of the trigger.
+VO_FC_SafetyOff_A.wav	FC_SafetyOff_A	Now turn the safety off. Press A again.
+VO_FC_SafetyOff_X.wav	FC_SafetyOff_X	Now turn the safety off. Press X again.
+VO_FC_TriggerDemo_Fire.wav	FC_TriggerDemo_Fire	Watch the trigger once more. This time, the hammer will drop.
+VO_FC_HammerDropped.wav	FC_HammerDropped	Click. The hammer dropped.
+VO_FC_KeepHolding.wav	FC_KeepHolding	Keep holding the trigger back.
+VO_FC_SlideDemo.wav	FC_SlideDemo	Now watch the glowing slide. It moves all the way back, then springs forward.
+VO_FC_YourTurn_Rack.wav	FC_YourTurn_Rack	With your other hand, grab the back of the slide. Pull it back, then let go.
+VO_FC_HoldWhileRacking.wav	FC_HoldWhileRacking	Keep the trigger pulled while you pull the slide. Let's try that again.
+VO_FC_ReleasedTooEarly.wav	FC_ReleasedTooEarly	You let go of the trigger too early. Pull it, hold it, and pull the slide again.
+VO_FC_ReleaseDemo.wav	FC_ReleaseDemo	Watch the trigger. It moves forward slowly, and stops at a click.
+VO_FC_YourTurn_Release.wav	FC_YourTurn_Release	Now you try. Let the trigger out slowly, and stop when you hear the click.
+VO_FC_ResetClick.wav	FC_ResetClick	That click means the trigger has reset.
+VO_FC_TriggerDemo_Last.wav	FC_TriggerDemo_Last	Watch the trigger one last time.
+VO_FC_YourTurn_Last.wav	FC_YourTurn_Last	Now pull the trigger all the way, one last time.
+VO_FC_Passed.wav	FC_Passed	Well done. The pistol works correctly.
+VO_Training_Complete.wav	Training_Complete	Your training is complete. You can train again, or go back to the modules.

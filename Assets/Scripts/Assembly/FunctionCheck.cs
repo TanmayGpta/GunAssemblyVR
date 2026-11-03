@@ -40,6 +40,27 @@ namespace VRArmory
         public float TriggerPull => triggerPull;
         public float SlideAmount => slideAmount;
         public Vector3 SlideRearDirection => frame != null ? frame.transform.TransformDirection(-muzzleLocal) : Vector3.back;
+        // Letting the trigger out past this point (from a full pull) resets it with a click.
+        public const float TriggerResetPoint = 0.3f;
+
+        // Where the slide / trigger would be at a given travel (0 = rest, 1 = fully back), in their parent's space,
+        // using the same rest pose, direction and pivot as the real animation. Nothing is moved. Used by the VR ghost
+        // demonstrations; valid once Begin() has built the rig (HasRig).
+        public bool HasRig => rigBuilt;
+        public Transform SlidePiece => slideT;
+        public Transform TriggerPiece => trigger?.t;
+        public Vector3 SlideLocalPosition(float amount) => Vector3.Lerp(slideRestLocal, slideBackLocal, amount);
+
+        public void TriggerLocalPose(float pull, out Vector3 localPosition, out Quaternion localRotation)
+        {
+            if (trigger == null)
+            {
+                localPosition = Vector3.zero;
+                localRotation = Quaternion.identity;
+                return;
+            }
+            trigger.PoseAt(pull * triggerPullAngle, out localPosition, out localRotation);
+        }
 
         private enum Check { SafeOn, SafeTrigger, SafeOff, DoubleAction, RackHeld, Reset, SingleAction, Done }
 
@@ -93,6 +114,14 @@ namespace VRArmory
                 t.localPosition = restPos;
                 t.localRotation = restRot;
                 if (angle != 0f) t.RotateAround(t.parent.TransformPoint(pivot), t.parent.TransformDirection(axis), angle);
+            }
+
+            // The pose Apply(angle) gives, without moving the piece (same rotation, done in the parent's space).
+            public void PoseAt(float angle, out Vector3 pos, out Quaternion rot)
+            {
+                Quaternion turn = Quaternion.AngleAxis(angle, axis);
+                pos = pivot + turn * (restPos - pivot);
+                rot = turn * restRot;
             }
         }
 
@@ -151,7 +180,7 @@ namespace VRArmory
             float prev = triggerPull;
             triggerPull = pull;
 
-            if (needsReset && pull < 0.3f && prev >= 0.3f)
+            if (needsReset && pull < TriggerResetPoint && prev >= TriggerResetPoint)
             {
                 needsReset = false;
                 Play(resetClip, 0.5f);
