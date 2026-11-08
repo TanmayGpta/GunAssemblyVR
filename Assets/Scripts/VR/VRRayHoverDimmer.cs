@@ -18,6 +18,8 @@ namespace VRArmory
         public float activeAlpha = 1f;
         [Tooltip("Seconds to fade between idle and active.")]
         public float fadeTime = 0.12f;
+        [Tooltip("Fully hide the ray while it points at nothing clickable (ignores Idle Alpha).")]
+        public bool hideWhenIdle = true;
 
         XRRayInteractor m_Ray;
         XRInteractorLineVisual m_Line;
@@ -31,7 +33,7 @@ namespace VRArmory
             m_Ray = GetComponent<XRRayInteractor>();
             m_Line = GetComponent<XRInteractorLineVisual>();
             m_Gradient = new Gradient();
-            m_Alpha = idleAlpha;
+            m_Alpha = hideWhenIdle ? 0f : idleAlpha;
             ApplyGradient();
             // One shared instance: the line visual hands it to the LineRenderer every frame, so updating its keys is enough.
             m_Line.validColorGradient = m_Gradient;
@@ -40,7 +42,7 @@ namespace VRArmory
 
         void LateUpdate()
         {
-            float target = IsOverSomethingUseful() ? activeAlpha : idleAlpha;
+            float target = IsOverSomethingUseful() ? activeAlpha : hideWhenIdle ? 0f : idleAlpha;
             m_Alpha = fadeTime > 0f
                 ? Mathf.MoveTowards(m_Alpha, target, Mathf.Abs(activeAlpha - idleAlpha) * Time.deltaTime / fadeTime)
                 : target;
@@ -49,8 +51,9 @@ namespace VRArmory
 
         bool IsOverSomethingUseful()
         {
-            if (m_Ray.hasSelection || m_Ray.interactablesHovered.Count > 0)
-                return true;
+            // Never while holding something: a force-grabbed part sits in the hand and the ray would just stick out.
+            if (m_Ray.hasSelection) return false;
+            if (m_Ray.interactablesHovered.Count > 0) return true;   // pointing at a gun part
             return m_Ray.enableUIInteraction && m_Ray.TryGetCurrentUIRaycastResult(out _);
         }
 
