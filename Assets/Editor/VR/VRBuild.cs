@@ -22,6 +22,10 @@ namespace VRArmory.Editor
 
             Directory.CreateDirectory(Path.GetDirectoryName(ApkPath));
             EditorUserBuildSettings.buildAppBundle = false; // an .apk for sideloading, not a store .aab
+            // CPU skinning: GPU (compute) skinning on OpenGL ES crashed the render thread right after the Intro ->
+            // SampleScene switch (GfxDeviceGLES::UpdateComputeConstantBuffers, null mapped buffer). Only the soldier
+            // and the hands are skinned, so the CPU handles them easily.
+            PlayerSettings.gpuSkinning = false;
             var options = new BuildPlayerOptions
             {
                 scenes = VRProjectSetup.BuildScenes,

@@ -56,6 +56,7 @@ namespace VRArmory.Editor
         static void ConfigureAndroidPlayer()
         {
             PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, AndroidPackageId);
+            PlayerSettings.gpuSkinning = false; // see VRBuild: GPU skinning on GLES crashed after the scene switch
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel29; // Quest OS minimum
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
