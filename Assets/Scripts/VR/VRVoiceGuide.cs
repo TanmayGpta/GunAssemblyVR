@@ -27,6 +27,8 @@ namespace VRArmory
         // Intro scene: Sgt. Forrest Gump's briefing (appended last: the values are saved as numbers in the scenes).
         Sgt_Welcome, Sgt_WhyItMatters, Sgt_Simulator, Sgt_ControlsIntro,
         Sgt_Grip, Sgt_Trigger, Sgt_Thumbsticks, Sgt_PrimaryButton, Sgt_SecondaryButton, Sgt_Ready,
+        // Fire range: the sergeant's live-fire training.
+        Rng_Offer, Rng_NotReady, Rng_Handover, Rng_Magazine, Rng_Load, Rng_FireWhenReady, Rng_CeaseFire, Rng_Declined,
     }
 
     [Serializable]

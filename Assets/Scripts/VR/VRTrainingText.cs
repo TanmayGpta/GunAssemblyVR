@@ -20,6 +20,9 @@ namespace VRArmory
         public const string ShootingModuleTitle = "Shooting Training";
         public const string ShootingModuleBody = "Aim and fire at targets on the live range.";
         public const string StatusComingSoon = "COMING SOON";
+        public const string StatusLiveRange = "LIVE RANGE";
+        public const string StatusLocked = "ASSEMBLE FIRST";
+        public const string ShootingLockedBody = "Assemble your pistol and complete the function check first (module 01).\nThen choose this module again, or talk to the sergeant at the range.";
 
         public const string ComingSoonLabel = "MODULE 02";
         public const string ComingSoonBody = "Aim and fire at targets on the range.\nThis module is being built and arrives in a future update.";
@@ -171,6 +174,28 @@ namespace VRArmory
 
         // ---------- Intro scene (soldier briefing) ----------
         public const string SergeantName = "SGT. FORREST GUMP";
+
+        // Fire range: the sergeant's offer.
+        public const string RangeSection = "LIVE-FIRE TRAINING";
+        public const string RangeOffer = "Ready for live-fire training, soldier? One magazine, fifteen rounds. Hit the targets as fast and as accurately as you can.";
+        public const string RangeYes = "YES, START";
+        public const string RangeNo = "NOT NOW";
+        public const string RangeDesktopHint = "[ENTER] YES     [BACKSPACE] NOT NOW";
+        public const string RangeDesktopHintNotReady = "[BACKSPACE] CLOSE";
+        public const string RangeNotReady = "Assemble your pistol and complete the function check first. Then come and see me.";
+        public const string RangeOk = "OK";
+        // The booth panel during the fire training.
+        public const string RangeStepMagazine = "Pick up the magazine from the counter.";
+        public const string RangeStepLoad = "Pick up the pistol, push the magazine into the grip, then rack the slide.";
+        public const string RangeStepRack = "Rack the slide to load the first round.";
+        public const string RangeStepInsert = "Push the magazine up into the grip.";
+        public const string RangeStepReady = "Safety off, then fire when ready. The clock starts with your first shot.";
+        public const string RangeStepFiring = "Fire all 15 rounds. Farther targets and the centre rings score more.";
+        public const string RangeStepDone = "CEASE FIRE - magazine empty.";
+        public const string RangeEnd = "END TRAINING";
+        public const string RangeRetry = "TRY AGAIN";
+        public const string RangeFinish = "FINISH";
+        public const string RangeBoothDesktopHint = "[ENTER] TRY AGAIN     [BACKSPACE] FINISH / END";
         public const string SergeantRole = "INSTRUCTOR";
         public const string SectionBriefing = "BRIEFING";
         public const string SectionControls = "CONTROLS";
@@ -251,6 +276,14 @@ namespace VRArmory
                 case VoiceLine.Sgt_PrimaryButton: return "This is the A button on the right controller, and X on the left. During the function check, it turns the safety on and off.";
                 case VoiceLine.Sgt_SecondaryButton: return "And this is B, or Y. Press it at any time, to hear an instruction again.";
                 case VoiceLine.Sgt_Ready: return "That's everything. When you are ready, point at Start, and pull the trigger. Good luck, recruit.";
+                case VoiceLine.Rng_Offer: return "Soldier! Ready for some live-fire training?";
+                case VoiceLine.Rng_NotReady: return "Assemble your pistol, and check that it works, first. Then come and see me.";
+                case VoiceLine.Rng_Handover: return "Step up to the counter. Your pistol and magazine are in front of you. Pick up the magazine.";
+                case VoiceLine.Rng_Magazine: return "This is the Beretta 92 FS, nine millimetre. Its magazine holds fifteen rounds, and it fires one round each time you pull the trigger. A trained shooter puts about forty aimed rounds a minute on target.";
+                case VoiceLine.Rng_Load: return "Pick up the pistol. Push the magazine up into the grip, then rack the slide, to load the first round.";
+                case VoiceLine.Rng_FireWhenReady: return "Safety off. The clock starts with your first shot. Farther targets, and the centre rings, score more. Fire when ready.";
+                case VoiceLine.Rng_CeaseFire: return "Cease fire! Magazine empty. Let's see how you did.";
+                case VoiceLine.Rng_Declined: return "Come back when you're ready, soldier.";
                 default: return "";
             }
         }

@@ -93,7 +93,7 @@ namespace VRArmory
             }
 
             assemblyModuleButton.onClick.AddListener(OnAssemblyModule);
-            shootingModuleButton.onClick.AddListener(() => Show(comingSoonPanel));
+            shootingModuleButton.onClick.AddListener(OnShootingModule);
             comingSoonBackButton.onClick.AddListener(() => Show(modulesPanel));
             startButton.onClick.AddListener(OnStartPressed);
             introBackButton.onClick.AddListener(() => Show(modulesPanel));
@@ -175,6 +175,34 @@ namespace VRArmory
         {
             Show(progressPanel);
             manager.BeginTraining();
+        }
+
+        // After every Awake (FireTraining registers itself there).
+        void Start()
+        {
+            RelabelShootingModule();
+        }
+
+        // Module 02: straight into the fire training booth when the pistol is assembled and checked; otherwise its panel
+        // says to do that first.
+        private void OnShootingModule()
+        {
+            FireTraining training = FireTraining.Instance;
+            if (training != null && training.CanBegin) training.Begin();
+            else if (training == null || !training.Running) Show(comingSoonPanel);
+        }
+
+        // The card and panel were built when this module was "coming soon": give them their live texts.
+        private void RelabelShootingModule()
+        {
+            if (FireTraining.Instance == null) return;
+            foreach (Text t in shootingModuleButton.GetComponentsInChildren<Text>(true))
+                if (t.text == VRTrainingText.StatusComingSoon) t.text = VRTrainingText.StatusLiveRange;
+            foreach (Text t in comingSoonPanel.GetComponentsInChildren<Text>(true))
+            {
+                if (t.text == VRTrainingText.StatusComingSoon) t.text = VRTrainingText.StatusLocked;
+                else if (t.text == VRTrainingText.ComingSoonBody) t.text = VRTrainingText.ShootingLockedBody;
+            }
         }
 
         private void Show(GameObject panel)

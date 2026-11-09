@@ -47,3 +47,11 @@ VO_Sgt_Thumbsticks.wav	Sgt_Thumbsticks	These are the thumbsticks. Push the left 
 VO_Sgt_PrimaryButton.wav	Sgt_PrimaryButton	This is the A button on the right controller, and X on the left. During the function check, it turns the safety on and off.
 VO_Sgt_SecondaryButton.wav	Sgt_SecondaryButton	And this is B, or Y. Press it at any time, to hear an instruction again.
 VO_Sgt_Ready.wav	Sgt_Ready	That's everything. When you are ready, point at Start, and pull the trigger. Good luck, recruit.
+VO_Rng_Offer.wav	Rng_Offer	Soldier! Ready for some live-fire training?
+VO_Rng_NotReady.wav	Rng_NotReady	Assemble your pistol, and check that it works, first. Then come and see me.
+VO_Rng_Handover.wav	Rng_Handover	Step up to the counter. Your pistol and magazine are in front of you. Pick up the magazine.
+VO_Rng_Magazine.wav	Rng_Magazine	This is the Beretta 92 FS, nine millimetre. Its magazine holds fifteen rounds, and it fires one round each time you pull the trigger. A trained shooter puts about forty aimed rounds a minute on target.
+VO_Rng_Load.wav	Rng_Load	Pick up the pistol. Push the magazine up into the grip, then rack the slide, to load the first round.
+VO_Rng_FireWhenReady.wav	Rng_FireWhenReady	Safety off. The clock starts with your first shot. Farther targets, and the centre rings, score more. Fire when ready.
+VO_Rng_CeaseFire.wav	Rng_CeaseFire	Cease fire! Magazine empty. Let's see how you did.
+VO_Rng_Declined.wav	Rng_Declined	Come back when you're ready, soldier.

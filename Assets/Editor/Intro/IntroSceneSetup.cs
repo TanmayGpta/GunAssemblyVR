@@ -90,7 +90,7 @@ namespace VRArmory.Editor
             platformSwitch.partGrabs = new VRAssemblyGrab[0];
 
             // --- Soldier, panels, voice, fade, director ---
-            Animator soldier = BuildSoldier(root.transform);
+            Animator soldier = BuildSoldier(root.transform, SoldierPos, Vector3.zero, BuildAnimatorController());
             IntroDirector director = new GameObject("Intro_Director").AddComponent<IntroDirector>();
             director.transform.SetParent(root.transform, false);
             Canvas dialog = BuildDialog(root.transform, director);
@@ -334,8 +334,12 @@ namespace VRArmory.Editor
 
         // ---------- Soldier ----------
 
-        static Animator BuildSoldier(Transform parent)
+        // The Mixamo soldier standing at pos (feet on the floor at pos.y + 0.03), facing lookAt, SoldierHeight tall, with
+        // a contact shadow. Null (with a warning) when the git-ignored model is missing. Also used for the range sergeant.
+        // lift: feet this far above pos.y (the Intro platform's top).
+        internal static Animator BuildSoldier(Transform parent, Vector3 pos, Vector3 lookAt, RuntimeAnimatorController controller, float lift = 0.03f)
         {
+            Vector3 SoldierPos = pos;
             GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(SoldierImportSettings.ModelPath);
             if (model == null)
             {
@@ -344,8 +348,8 @@ namespace VRArmory.Editor
             }
             GameObject soldier = (GameObject)PrefabUtility.InstantiatePrefab(model, parent);
             soldier.name = "Sgt_Forrest_Gump";
-            Vector3 toPlayer = new Vector3(-SoldierPos.x, 0f, -SoldierPos.z);
-            soldier.transform.SetPositionAndRotation(SoldierPos + Vector3.up * 0.03f, Quaternion.LookRotation(toPlayer));
+            Vector3 toPlayer = new Vector3(lookAt.x - SoldierPos.x, 0f, lookAt.z - SoldierPos.z);
+            soldier.transform.SetPositionAndRotation(SoldierPos + Vector3.up * lift, Quaternion.LookRotation(toPlayer));
 
             // Mixamo exports vary in scale: make him SoldierHeight tall, feet on the platform.
             Bounds b = RendererBounds(soldier);
@@ -353,7 +357,7 @@ namespace VRArmory.Editor
             {
                 soldier.transform.localScale *= SoldierHeight / b.size.y;
                 b = RendererBounds(soldier);
-                soldier.transform.position += Vector3.up * (SoldierPos.y + 0.03f - b.min.y);
+                soldier.transform.position += Vector3.up * (SoldierPos.y + lift - b.min.y);
             }
             foreach (SkinnedMeshRenderer smr in soldier.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
@@ -362,14 +366,14 @@ namespace VRArmory.Editor
             }
 
             Animator animator = GetOrAdd<Animator>(soldier);
-            animator.runtimeAnimatorController = BuildAnimatorController();
+            animator.runtimeAnimatorController = controller;
             animator.applyRootMotion = false;
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             // Soft contact shadow under his feet (no real-time shadows on Quest).
             GameObject shadow = new GameObject("Contact_Shadow", typeof(RectTransform));
             shadow.transform.SetParent(parent, false);
-            shadow.transform.SetPositionAndRotation(SoldierPos + Vector3.up * 0.032f, Quaternion.Euler(90f, 0f, 0f));
+            shadow.transform.SetPositionAndRotation(SoldierPos + Vector3.up * (lift + 0.002f), Quaternion.Euler(90f, 0f, 0f));
             shadow.transform.localScale = Vector3.one * 0.001f;
             ((RectTransform)shadow.transform).sizeDelta = new Vector2(700f, 700f);
             shadow.AddComponent<Canvas>().renderMode = RenderMode.WorldSpace;
@@ -389,6 +393,13 @@ namespace VRArmory.Editor
         }
 
         // Idle <-> Talking on the "Talking" bool, "Salute" trigger plays the salute once, then back to Idle.
+        // The soldier's animator (Idle / Talking / Salute) as saved by the Intro setup; built if it does not exist yet.
+        internal static RuntimeAnimatorController SoldierController()
+        {
+            var c = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerAnimatorPath);
+            return c != null ? c : BuildAnimatorController();
+        }
+
         static AnimatorController BuildAnimatorController()
         {
             AnimationClip idle = SoldierImportSettings.LoadClip(SoldierImportSettings.IdlePath);
@@ -433,7 +444,7 @@ namespace VRArmory.Editor
 
         // ---------- Panels ----------
 
-        static GameObject WorldCanvas(Transform parent, string name, Vector2 size, bool interactive)
+        internal static GameObject WorldCanvas(Transform parent, string name, Vector2 size, bool interactive)
         {
             GameObject go = new GameObject(name, typeof(RectTransform));
             go.layer = LayerMask.NameToLayer("UI");

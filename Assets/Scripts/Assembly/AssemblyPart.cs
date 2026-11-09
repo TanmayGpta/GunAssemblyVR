@@ -170,6 +170,35 @@ namespace VRArmory
             foreach (Collider c in colliders) c.enabled = true;
         }
 
+        // Fire training: the part's "home" (where it goes when let go) becomes a spot on the booth counter, until
+        // RestoreHome puts it back to the armory bench.
+        private bool homeOverridden;
+        private Transform savedHomeParent;
+        private Vector3 savedHomePos;
+        private Quaternion savedHomeRot;
+
+        public void OverrideHome(Vector3 worldPos, Quaternion worldRot)
+        {
+            if (!homeOverridden)
+            {
+                savedHomeParent = homeParent;
+                savedHomePos = homeLocalPos;
+                savedHomeRot = homeLocalRot;
+                homeOverridden = true;
+            }
+            homeLocalPos = homeParent != null ? homeParent.InverseTransformPoint(worldPos) : worldPos;
+            homeLocalRot = homeParent != null ? Quaternion.Inverse(homeParent.rotation) * worldRot : worldRot;
+        }
+
+        public void RestoreHome()
+        {
+            if (!homeOverridden) return;
+            homeOverridden = false;
+            homeParent = savedHomeParent;
+            homeLocalPos = savedHomePos;
+            homeLocalRot = savedHomeRot;
+        }
+
         // Straight to its place on the bench, no flight (a fresh magazine appearing there).
         public void SnapHome()
         {

@@ -19,6 +19,8 @@ namespace VRArmory
         public Camera playerCamera;
         // Set by interactors that borrow the mouse (e.g. rotating the off-hand part).
         [System.NonSerialized] public bool lookLocked;
+        // Set by the fire training: the player stays in the booth (looking around still works).
+        [System.NonSerialized] public bool moveLocked;
 
         private CharacterController characterController;
         private float pitch = 0f;
@@ -49,7 +51,7 @@ namespace VRArmory
             if (Cursor.lockState == CursorLockMode.Locked)
             {
                 if (!lookLocked) HandleLook();
-                HandleMovement();
+                if (!moveLocked) HandleMovement();
             }
         }
 

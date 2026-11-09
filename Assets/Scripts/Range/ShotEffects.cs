@@ -100,6 +100,21 @@ namespace VRArmory
             }
         }
 
+        // Removes every bullet hole (a new fire-training round starts clean). The holes are kept for reuse.
+        public void ClearHoles()
+        {
+            foreach (Transform h in holes) Park(h);
+            foreach (Queue<Transform> q in targetHoles.Values)
+                foreach (Transform h in q) Park(h);
+        }
+
+        private void Park(Transform hole)
+        {
+            if (hole == null) return;
+            hole.gameObject.SetActive(false);
+            hole.SetParent(transform, false);
+        }
+
         // ---------- Pieces ----------
 
         private void ShowFlash(Vector3 muzzle, Vector3 dir)

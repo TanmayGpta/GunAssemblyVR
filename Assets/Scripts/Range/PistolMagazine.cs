@@ -114,6 +114,22 @@ namespace VRArmory
             Changed?.Invoke();
         }
 
+        // Fire training: the magazine comes out of the pistol (if in) without a sound and is loaded with 'rounds'; nothing
+        // chambered, slide closed. The caller puts the magazine where it should be.
+        public void PrepareMagazine(int rounds)
+        {
+            if (MagazineInserted && magazine != null)
+            {
+                MagazineInserted = false;
+                magazine.Unseat();
+                if (magazineWell != null) magazineWell.Empty();
+            }
+            RoundsInMagazine = Mathf.Clamp(rounds, 0, capacity);
+            Chambered = false;
+            if (functionCheck != null) functionCheck.ReleaseSlideLock();
+            Changed?.Invoke();
+        }
+
         // Is B / Y on this side the magazine release right now (then it is not the voice "repeat" button)?
         public static bool OwnsSecondaryButton(bool left)
         {

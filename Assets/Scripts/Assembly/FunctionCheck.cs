@@ -256,6 +256,12 @@ namespace VRArmory
             if (!safetyOn) hammerCocked = true;
         }
 
+        // Fire training restart: the slide closes (released from its lock).
+        public void ReleaseSlideLock()
+        {
+            slideLocked = false;
+        }
+
         // How far back the slide is in its recoil cycle: fast back, a little slower forward.
         private float CycleAmount()
         {
