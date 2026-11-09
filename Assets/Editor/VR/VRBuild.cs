@@ -24,7 +24,7 @@ namespace VRArmory.Editor
             EditorUserBuildSettings.buildAppBundle = false; // an .apk for sideloading, not a store .aab
             var options = new BuildPlayerOptions
             {
-                scenes = new[] { VRProjectSetup.ScenePath },
+                scenes = VRProjectSetup.BuildScenes,
                 locationPathName = ApkPath,
                 target = BuildTarget.Android,
                 targetGroup = BuildTargetGroup.Android,

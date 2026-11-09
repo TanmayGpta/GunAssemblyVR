@@ -6,7 +6,7 @@ namespace VRArmory
 {
     // Every spoken instruction. The clip for a line is Assets/Audio/Voice/VO_<name>.wav and its words are
     // VRTrainingText.Spoken(line). Lines are grouped by where they are used: Intro (panel), Asm (assembly steps),
-    // FC (function check). A line ending in _A / _X names the safety button of the hand holding the pistol.
+    // FC (function check), Sgt (the soldier's briefing in the Intro scene). A line ending in _A / _X names the safety button of the hand holding the pistol.
     public enum VoiceLine
     {
         None,
@@ -24,6 +24,9 @@ namespace VRArmory
         FC_ReleaseDemo, FC_YourTurn_Release,
         FC_ResetClick, FC_TriggerDemo_Last, FC_YourTurn_Last,
         FC_Passed, Training_Complete,
+        // Intro scene: Sgt. Forrest Gump's briefing (appended last: the values are saved as numbers in the scenes).
+        Sgt_Welcome, Sgt_WhyItMatters, Sgt_Simulator, Sgt_ControlsIntro,
+        Sgt_Grip, Sgt_Trigger, Sgt_Thumbsticks, Sgt_PrimaryButton, Sgt_SecondaryButton, Sgt_Ready,
     }
 
     [Serializable]

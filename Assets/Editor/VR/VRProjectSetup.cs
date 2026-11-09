@@ -23,6 +23,10 @@ namespace VRArmory.Editor
     public static class VRProjectSetup
     {
         public const string ScenePath = "Assets/Scenes/SampleScene.unity";
+        public const string IntroScenePath = "Assets/Scenes/Intro.unity";
+
+        // Build order: the Intro (soldier briefing) first, when it has been created, then the training scene.
+        public static string[] BuildScenes => System.IO.File.Exists(IntroScenePath) ? new[] { IntroScenePath, ScenePath } : new[] { ScenePath };
         public const string AndroidPackageId = "com.vrarmory.gunassemblyvr";
         const string XRSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
         const string LayerSettingsPath = "Assets/XRI/Settings/Resources/InteractionLayerSettings.asset";
@@ -46,7 +50,7 @@ namespace VRArmory.Editor
         // Audit G-09: Build Settings had no scenes, so builds needed the scene passed by hand.
         static void ConfigureBuildSettings()
         {
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            EditorBuildSettings.scenes = System.Array.ConvertAll(BuildScenes, path => new EditorBuildSettingsScene(path, true));
         }
 
         static void ConfigureAndroidPlayer()

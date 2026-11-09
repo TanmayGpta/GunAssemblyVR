@@ -37,3 +37,13 @@ VO_FC_TriggerDemo_Last.wav	FC_TriggerDemo_Last	Watch the trigger one last time.
 VO_FC_YourTurn_Last.wav	FC_YourTurn_Last	Now pull the trigger all the way, one last time.
 VO_FC_Passed.wav	FC_Passed	Well done. The pistol works correctly.
 VO_Training_Complete.wav	Training_Complete	Your training is complete. You can train again, or go back to the modules.
+VO_Sgt_Welcome.wav	Sgt_Welcome	Welcome, recruit. I am Sergeant Forrest Gump, and I will be your instructor today.
+VO_Sgt_WhyItMatters.wav	Sgt_WhyItMatters	In the field, your weapon is your lifeline. A soldier who knows their weapon inside and out can clear a jam, fix a fault, and keep it working, even under pressure. That can save your life, and the lives of your team.
+VO_Sgt_Simulator.wav	Sgt_Simulator	In this simulator, you will put a pistol together, part by part, and then check that it works. Practise as many times as you need, safely, until it becomes second nature.
+VO_Sgt_ControlsIntro.wav	Sgt_ControlsIntro	Before we begin, let's go over your controls. Look at the panel on your right.
+VO_Sgt_Grip.wav	Sgt_Grip	This is the grip button, on the side of each controller. Squeeze it to pick up, and hold, a part.
+VO_Sgt_Trigger.wav	Sgt_Trigger	This is the trigger, under your index finger. Pull it to press buttons. On the pistol, it pulls the trigger.
+VO_Sgt_Thumbsticks.wav	Sgt_Thumbsticks	These are the thumbsticks. Push the left stick to walk, and the right stick to turn.
+VO_Sgt_PrimaryButton.wav	Sgt_PrimaryButton	This is the A button on the right controller, and X on the left. During the function check, it turns the safety on and off.
+VO_Sgt_SecondaryButton.wav	Sgt_SecondaryButton	And this is B, or Y. Press it at any time, to hear an instruction again.
+VO_Sgt_Ready.wav	Sgt_Ready	That's everything. When you are ready, point at Start, and pull the trigger. Good luck, recruit.

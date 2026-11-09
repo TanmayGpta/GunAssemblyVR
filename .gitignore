@@ -107,3 +107,17 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Kokoro TTS model files (downloaded locally, ~330 MB)
+Tools/VoiceGeneration/models/
+
+# Intro soldier model (Sgt. Forrest Gump) - too big for GitHub (115 MB), so it is NOT in the repo.
+# The Intro scene needs this exact file to show the soldier:
+#   Mixamo character "Ch15" (non-PBR), downloaded as "FBX for Unity", T-pose
+#   -> Assets/Characters/Ch15_nonPBR.fbx
+# Then run Tools > VR Armory > VR > Setup Intro Scene. Idle/Talking/Salute animations are in the repo.
+Assets/Characters/Ch15_nonPBR.fbx
+Assets/Characters/Ch15_nonPBR.fbx.meta
+# Textures unpacked from that model by the Intro setup
+Assets/Characters/Textures/
+Assets/Characters/Textures.meta

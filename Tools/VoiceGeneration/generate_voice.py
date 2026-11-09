@@ -25,8 +25,8 @@ import numpy as np
 import soundfile as sf
 from kokoro_onnx import Kokoro
 
-VOICE = "af_heart"        # calm, warm, clear
-SPEED = 0.9               # a little slower than conversation: unhurried, easy to follow
+VOICE = "am_onyx"         # deep, steady male: the drill sergeant
+SPEED = 0.85              # a little slower than conversation: unhurried, easy to follow
 SENTENCE_PAUSE = 0.5      # seconds of silence between two sentences of one line
 LEAD_IN, TAIL = 0.12, 0.25
 TARGET_RMS_DB = -20.0     # every line equally loud

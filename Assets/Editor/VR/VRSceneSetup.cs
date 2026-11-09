@@ -38,18 +38,18 @@ namespace VRArmory.Editor
         static readonly Vector3 BenchStandPoint = new Vector3(0f, 0f, -0.95f);
 
         // Training panel colours (one palette: teal = "this is what to use", green = done, amber = adjust, red = wrong).
-        static readonly Color PanelColor = new Color(0.05f, 0.065f, 0.085f, 0.97f);
-        static readonly Color CardColor = new Color(0.115f, 0.14f, 0.175f, 1f);
-        static readonly Color Accent = new Color(0.3f, 0.92f, 0.86f);
-        static readonly Color Success = new Color(0.36f, 0.9f, 0.52f);
-        static readonly Color Warning = new Color(1.0f, 0.76f, 0.32f);
-        static readonly Color TextPrimary = new Color(0.95f, 0.97f, 1f);
-        static readonly Color TextSecondary = new Color(0.62f, 0.68f, 0.76f);
-        static readonly Color PrimaryButton = new Color(0.14f, 0.6f, 0.56f);
-        static readonly Color SecondaryButton = new Color(0.17f, 0.2f, 0.25f);
+        internal static readonly Color PanelColor = new Color(0.05f, 0.065f, 0.085f, 0.97f);
+        internal static readonly Color CardColor = new Color(0.115f, 0.14f, 0.175f, 1f);
+        internal static readonly Color Accent = new Color(0.3f, 0.92f, 0.86f);
+        internal static readonly Color Success = new Color(0.36f, 0.9f, 0.52f);
+        internal static readonly Color Warning = new Color(1.0f, 0.76f, 0.32f);
+        internal static readonly Color TextPrimary = new Color(0.95f, 0.97f, 1f);
+        internal static readonly Color TextSecondary = new Color(0.62f, 0.68f, 0.76f);
+        internal static readonly Color PrimaryButton = new Color(0.14f, 0.6f, 0.56f);
+        internal static readonly Color SecondaryButton = new Color(0.17f, 0.2f, 0.25f);
 
-        static Sprite RoundedSprite => AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-        static Sprite CircleSprite => AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+        internal static Sprite RoundedSprite => AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+        internal static Sprite CircleSprite => AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
 
         // Panel size in canvas units (1 unit = 1 mm). Text boxes are left-aligned inside a 48 mm margin.
         const float PanelW = 800f, PanelH = 460f, ContentW = 704f;
@@ -385,7 +385,7 @@ namespace VRArmory.Editor
             }
         }
 
-        static Material GetOrCreateGuideMaterial()
+        internal static Material GetOrCreateGuideMaterial()
         {
             Material m = AssetDatabase.LoadAssetAtPath<Material>(GuideMaterialPath);
             if (m != null) return m;
@@ -593,7 +593,7 @@ namespace VRArmory.Editor
             return p;
         }
 
-        static T MakeGraphic<T>(Transform parent, string name, Vector2 pos, Vector2 size) where T : Graphic
+        internal static T MakeGraphic<T>(Transform parent, string name, Vector2 pos, Vector2 size) where T : Graphic
         {
             T g = Make<T>(parent, name, pos, size);
             g.raycastTarget = false;
@@ -601,7 +601,7 @@ namespace VRArmory.Editor
         }
 
         // 9-sliced rounded rectangle; a smaller pixelsPerUnitMultiplier gives rounder corners.
-        static Image Rounded(Transform parent, string name, Vector2 pos, Vector2 size, Color color, float cornerScale)
+        internal static Image Rounded(Transform parent, string name, Vector2 pos, Vector2 size, Color color, float cornerScale)
         {
             Image img = Make<Image>(parent, name, pos, size);
             img.sprite = RoundedSprite;
@@ -612,7 +612,7 @@ namespace VRArmory.Editor
             return img;
         }
 
-        static T Make<T>(Transform parent, string name, Vector2 pos, Vector2 size) where T : Component
+        internal static T Make<T>(Transform parent, string name, Vector2 pos, Vector2 size) where T : Component
         {
             GameObject go = new GameObject(name, typeof(RectTransform));
             go.layer = parent.gameObject.layer;
@@ -629,7 +629,7 @@ namespace VRArmory.Editor
             return Label(parent, name, text, size, color, new Vector2(0f, y), new Vector2(ContentW, height), TextAnchor.MiddleLeft, style);
         }
 
-        static Text Label(Transform parent, string name, string text, int size, Color color, Vector2 pos, Vector2 box, TextAnchor align, FontStyle style = FontStyle.Normal)
+        internal static Text Label(Transform parent, string name, string text, int size, Color color, Vector2 pos, Vector2 box, TextAnchor align, FontStyle style = FontStyle.Normal)
         {
             Text t = Make<Text>(parent, name, pos, box);
             t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -643,7 +643,7 @@ namespace VRArmory.Editor
             return t;
         }
 
-        static Button MakeButton(Transform parent, string name, string label, Vector2 pos, Vector2 size, bool primary)
+        internal static Button MakeButton(Transform parent, string name, string label, Vector2 pos, Vector2 size, bool primary)
         {
             Image img = Rounded(parent, name, pos, size, Color.white, 0.5f); // tinted by the button colours below
             img.raycastTarget = true;
@@ -799,7 +799,7 @@ namespace VRArmory.Editor
             return lights.ToArray();
         }
 
-        static GameObject FindOrCreate(Transform parent, string name)
+        internal static GameObject FindOrCreate(Transform parent, string name)
         {
             if (parent == null)
             {
@@ -819,7 +819,7 @@ namespace VRArmory.Editor
         }
 
         // Explicit null check: GetComponent returns a fake-null object in the editor, which defeats '??'.
-        static T GetOrAdd<T>(GameObject go) where T : Component
+        internal static T GetOrAdd<T>(GameObject go) where T : Component
         {
             T c = go.GetComponent<T>();
             return c != null ? c : go.AddComponent<T>();

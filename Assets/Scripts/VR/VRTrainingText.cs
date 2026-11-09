@@ -169,6 +169,29 @@ namespace VRArmory
         public const string TrainAgain = "Train again";
         public const string BackToModules = "Back to modules";
 
+        // ---------- Intro scene (soldier briefing) ----------
+        public const string SergeantName = "SGT. FORREST GUMP";
+        public const string SergeantRole = "INSTRUCTOR";
+        public const string SectionBriefing = "BRIEFING";
+        public const string SectionControls = "CONTROLS";
+        public const string SectionReady = "READY";
+        public const string IntroWaiting = "...";
+        public const string Next = "Next";
+        public const string Skip = "Skip";
+        public const string Replay = "Replay";
+        public const string StartGame = "Start";
+        public const string ControlsLabel = "CONTROLS";
+        public const string ControlsTitle = "Your controllers";
+        public const string ControlsFooter = "Try them now - each one lights up green when you press it.";
+        public const string GripRowUse = "Pick up and hold parts";
+        public const string TriggerRowUse = "Press buttons and fire";
+        public const string SticksChip = "STICKS";
+        public const string SticksRowUse = "Left walks, right turns";
+        public const string PrimaryChip = "A / X";
+        public const string PrimaryRowUse = "Safety on / off";
+        public const string SecondaryChip = "B / Y";
+        public const string SecondaryRowUse = "Hear it again";
+
         // ---------- Spoken (VRVoiceGuide) ----------
         // What the voice says. The recordings (Assets/Audio/Voice/VO_<line>.wav) are made from exactly these words;
         // after changing one, record or generate that clip again (see VR_GUIDANCE.md). One action per line, plain words,
@@ -217,6 +240,17 @@ namespace VRArmory
                 case VoiceLine.FC_YourTurn_Last: return "Now pull the trigger all the way, one last time.";
                 case VoiceLine.FC_Passed: return "Well done. The pistol works correctly.";
                 case VoiceLine.Training_Complete: return "Your training is complete. You can train again, or go back to the modules.";
+
+                case VoiceLine.Sgt_Welcome: return "Welcome, recruit. I am Sergeant Forrest Gump, and I will be your instructor today.";
+                case VoiceLine.Sgt_WhyItMatters: return "In the field, your weapon is your lifeline. A soldier who knows their weapon inside and out can clear a jam, fix a fault, and keep it working, even under pressure. That can save your life, and the lives of your team.";
+                case VoiceLine.Sgt_Simulator: return "In this simulator, you will put a pistol together, part by part, and then check that it works. Practise as many times as you need, safely, until it becomes second nature.";
+                case VoiceLine.Sgt_ControlsIntro: return "Before we begin, let's go over your controls. Look at the panel on your right.";
+                case VoiceLine.Sgt_Grip: return "This is the grip button, on the side of each controller. Squeeze it to pick up, and hold, a part.";
+                case VoiceLine.Sgt_Trigger: return "This is the trigger, under your index finger. Pull it to press buttons. On the pistol, it pulls the trigger.";
+                case VoiceLine.Sgt_Thumbsticks: return "These are the thumbsticks. Push the left stick to walk, and the right stick to turn.";
+                case VoiceLine.Sgt_PrimaryButton: return "This is the A button on the right controller, and X on the left. During the function check, it turns the safety on and off.";
+                case VoiceLine.Sgt_SecondaryButton: return "And this is B, or Y. Press it at any time, to hear an instruction again.";
+                case VoiceLine.Sgt_Ready: return "That's everything. When you are ready, point at Start, and pull the trigger. Good luck, recruit.";
                 default: return "";
             }
         }

@@ -21634,7 +21634,7 @@ MonoBehaviour:
   leftHandPrefab: {fileID: 2119128821997336139, guid: ffd656bf2a3ba3d41b1e4a94b81b7c85, type: 3}
   rightHandPrefab: {fileID: 2746493918707896725, guid: 89e80c47615e4f043926d66492d3ca5f, type: 3}
   handMaterial: {fileID: 2100000, guid: 613690cd962241049a0ec289a6ff835e, type: 2}
-  palmDepth: 0.035
+  palmDepth: 0.025
   positionOffset: {x: 0, y: -0.01, z: 0}
   rotationOffset: {x: 0, y: 0, z: 0}
   pistolRotationOffset: {x: 0, y: 0, z: 0}
@@ -21650,15 +21650,22 @@ MonoBehaviour:
   fingerSpeed: 20
   wrapMaxCurl: {x: 90, y: 100, z: 70}
   fingerRadius: 0.009
-  wrapStep: 3
-  wrapFollow: 0.9
+  wrapStep: 2
+  wrapFollow: 0.763
   pistolHoldOffset: {x: 0, y: 0.025, z: 0.035}
   gripYaw: 15
   thumbDropFromTop: 0.012
-  thumbLength: 0.85
+  thumbLength: 0.72
   indexPullExtra: {x: 12, y: 15, z: 8}
   thumbTipDrop: 0.008
-  thumbBaseSwing: 0.3
+  thumbBaseTurnLimit: 70
+  thumbBaseAimForward: 0.03
+  thumbBaseAimDrop: 0.012
+  thumbBaseRotation: {x: 11.97, y: -64.3, z: 0}
+  thumbKnuckleRotation: {x: 0, y: 33.8, z: 0}
+  thumbTipRotation: {x: 11.69, y: 12.5, z: 0}
+  thumbAutoWrap: 0
+  showThumbPath: 1
 --- !u!1 &948416337
 GameObject:
   m_ObjectHideFlags: 0
