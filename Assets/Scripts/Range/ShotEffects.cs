@@ -34,6 +34,8 @@ namespace VRArmory
         public float targetHoleSize = 0.03f;
         [Tooltip("...plus this much per metre of distance from the shooter.")]
         public float targetHoleSizePerMeter = 0.003f;
+        [Tooltip("Holes kept on each dummy: a new one beyond this replaces that dummy's oldest.")]
+        public int holesPerTarget = 10;
         public Color dustColor = new Color(0.62f, 0.57f, 0.5f, 0.75f);
         public int dustParticles = 9;
 
@@ -46,19 +48,22 @@ namespace VRArmory
         private readonly List<float> tracerTimers = new List<float>();
         private readonly List<Transform> holes = new List<Transform>();
         private int nextHole;
+        private readonly Dictionary<Transform, Queue<Transform>> targetHoles = new Dictionary<Transform, Queue<Transform>>();
         private ParticleSystem dust;
         private bool built;
 
-        // onTarget: the shot hit a range dummy (cracked, bigger hole, scaled with distance).
-        public void Shot(Vector3 muzzle, Vector3 end, bool hit, Vector3 normal, Collider hitCollider, bool onTarget = false)
+        // target: the range dummy that was hit, if any (cracked, bigger hole scaled with distance, holesPerTarget each).
+        public void Shot(Vector3 muzzle, Vector3 end, bool hit, Vector3 normal, Collider hitCollider, Transform target = null)
         {
+            bool onTarget = target != null;
             if (!built) Build();
             ShowFlash(muzzle, (end - muzzle).normalized);
             ShowTracer(muzzle, end);
             if (hit)
             {
                 float size = onTarget ? targetHoleSize + targetHoleSizePerMeter * Vector3.Distance(muzzle, end) : holeSize;
-                PlaceHole(end, normal, hitCollider != null ? hitCollider.transform : null, onTarget ? targetHoleMat : holeMat, size);
+                Transform hole = onTarget ? NextTargetHole(target) : NextSurfaceHole();
+                PlaceHole(hole, end, normal, hitCollider != null ? hitCollider.transform : null, onTarget ? targetHoleMat : holeMat, size);
                 EmitDust(end, normal);
             }
         }
@@ -126,17 +131,32 @@ namespace VRArmory
             tracerTimers[slot] = tracerTime;
         }
 
-        private void PlaceHole(Vector3 point, Vector3 normal, Transform surface, Material mat, float size)
+        // Walls, floor, props: one shared ring of maxHoles, the oldest is reused.
+        private Transform NextSurfaceHole()
         {
             if (holes.Count < maxHoles) holes.Add(null);
             int i = nextHole;
             nextHole = (nextHole + 1) % maxHoles;
-            Transform hole = holes[i];
-            if (hole == null) // never made, or its surface was destroyed
+            if (holes[i] == null) holes[i] = MakeQuad("Bullet_Hole", holeMat).transform; // never made, or its surface was destroyed
+            return holes[i];
+        }
+
+        // Each dummy keeps its own last holesPerTarget holes.
+        private Transform NextTargetHole(Transform target)
+        {
+            if (!targetHoles.TryGetValue(target, out Queue<Transform> queue))
             {
-                hole = MakeQuad("Bullet_Hole", mat).transform;
-                holes[i] = hole;
+                queue = new Queue<Transform>();
+                targetHoles[target] = queue;
             }
+            Transform hole = queue.Count >= holesPerTarget ? queue.Dequeue() : null;
+            if (hole == null) hole = MakeQuad("Bullet_Hole_Target", targetHoleMat).transform;
+            queue.Enqueue(hole);
+            return hole;
+        }
+
+        private void PlaceHole(Transform hole, Vector3 point, Vector3 normal, Transform surface, Material mat, float size)
+        {
             hole.GetComponent<MeshRenderer>().sharedMaterial = mat;
             hole.SetParent(null, false);
             // Off the surface: in front of thin overlays such as the dummies' scoring-ring sheet (2-3 mm out), no flicker.

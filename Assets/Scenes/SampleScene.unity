@@ -12918,6 +12918,8 @@ GameObject:
   - component: {fileID: 594670686}
   - component: {fileID: 594670685}
   - component: {fileID: 594670684}
+  - component: {fileID: 594670687}
+  - component: {fileID: 594670688}
   m_Layer: 0
   m_Name: Range_Live_Fire
   m_TagString: Untagged
@@ -12940,6 +12942,7 @@ MonoBehaviour:
   functionCheck: {fileID: 1365795923}
   frameGrab: {fileID: 1584792788}
   effects: {fileID: 594670685}
+  ammo: {fileID: 594670687}
   gunshot: {fileID: 8300000, guid: b9baf8f104cc6614b9c095f30396e17d, type: 3}
   range: 150
   spreadDegrees: 0.12
@@ -12974,6 +12977,8 @@ MonoBehaviour:
   tracerColor: {r: 1, g: 0.86, b: 0.58, a: 1}
   maxHoles: 60
   holeSize: 0.022
+  targetHoleSize: 0.03
+  targetHoleSizePerMeter: 0.003
   dustColor: {r: 0.62, g: 0.57, b: 0.5, a: 0.75}
   dustParticles: 9
 --- !u!4 &594670686
@@ -12991,6 +12996,42 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &594670687
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 594670683}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3eee62780cdfad4aa36dff901bcad28, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  functionCheck: {fileID: 1365795923}
+  frameGrab: {fileID: 1584792788}
+  magazine: {fileID: 658540451}
+  magazineWell: {fileID: 381229841}
+  capacity: 15
+  refillOnInsert: 1
+  spentLifetime: 4
+  showReadout: 1
+  releaseHaptic: 0.35
+--- !u!114 &594670688
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 594670683}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb9310609ce953d4183c333ad954986b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  firing: {fileID: 594670684}
+  popupTime: 1.3
+  popupAngularSize: 0.05
 --- !u!1 &594913381
 GameObject:
   m_ObjectHideFlags: 0
@@ -20086,6 +20127,12 @@ MonoBehaviour:
   headHits: 0
   torsoHits: 0
   otherHits: 0
+  ringCentreLocal: {x: 0, y: 1.3625, z: 0}
+  bullRadius: 0.018
+  ringStep: 0.036
+  ringCount: 6
+  headScore: 10
+  torsoOutsideRingsScore: 3
 --- !u!114 &858311339
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -30905,6 +30952,12 @@ MonoBehaviour:
   headHits: 0
   torsoHits: 0
   otherHits: 0
+  ringCentreLocal: {x: 0, y: 1.3625, z: 0}
+  bullRadius: 0.018
+  ringStep: 0.036
+  ringCount: 6
+  headScore: 10
+  torsoOutsideRingsScore: 3
 --- !u!114 &1359844560
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -40802,6 +40855,12 @@ MonoBehaviour:
   headHits: 0
   torsoHits: 0
   otherHits: 0
+  ringCentreLocal: {x: 0, y: 1.3625, z: 0}
+  bullRadius: 0.018
+  ringStep: 0.036
+  ringCount: 6
+  headScore: 10
+  torsoOutsideRingsScore: 3
 --- !u!114 &1783948326
 MonoBehaviour:
   m_ObjectHideFlags: 0

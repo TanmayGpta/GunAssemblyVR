@@ -12,13 +12,14 @@ namespace VRArmory
     //    (semi-automatic, one round per pull);
     //  - a slight recoil kick (muzzle up, gun back toward the hand) and a strong controller buzz;
     //  - range dummies (RangeTarget) get the hit; loose rigid bodies get a small push.
-    // Ammunition is unlimited for now (magazines come in the next step).
+    // Ammunition: PistolMagazine (chamber + 15-round magazine; without it, unlimited).
     public class PistolFiring : MonoBehaviour
     {
         public FunctionCheck functionCheck;
         [Tooltip("The pistol's grab (frame). Optional: without it (desktop) there is no recoil kick or vibration.")]
         public VRAssemblyGrab frameGrab;
         public ShotEffects effects;
+        public PistolMagazine ammo;
         public AudioClip gunshot;
 
         [Header("Ballistics")]
@@ -74,10 +75,14 @@ namespace VRArmory
         private void OnHammerFell()
         {
             // During the function check the hammer falls on an empty chamber: only live once the check has passed.
-            if (functionCheck.Passed && functionCheck.HasRig) Fire();
+            if (!functionCheck.Passed || !functionCheck.HasRig) return;
+            bool lockOpen = false;
+            if (ammo != null && !ammo.TakeChamberedRound(out lockOpen)) return; // empty chamber: only the hammer's click
+            Fire(lockOpen);
         }
 
-        public void Fire()
+        // lockOpen: the last round, the slide stays back.
+        public void Fire(bool lockOpen = false)
         {
             ShotsFired++;
             Vector3 muzzle = functionCheck.MuzzlePosition;
@@ -86,7 +91,7 @@ namespace VRArmory
             bool hit = TryHit(muzzle, dir, out RaycastHit h);
             Vector3 end = hit ? h.point : muzzle + dir * range;
             RangeTarget target = hit ? h.collider.GetComponentInParent<RangeTarget>() : null;
-            if (effects != null) effects.Shot(muzzle, end, hit, hit ? h.normal : -dir, hit ? h.collider : null, target != null);
+            if (effects != null) effects.Shot(muzzle, end, hit, hit ? h.normal : -dir, hit ? h.collider : null, target != null ? target.transform : null);
 
             if (gunshot != null)
             {
@@ -95,7 +100,7 @@ namespace VRArmory
                 audioSource.PlayOneShot(gunshot, volume);
             }
 
-            functionCheck.CycleSlide();
+            functionCheck.CycleSlide(lockOpen);
             sinceShot = 0f;
             if (frameGrab != null && frameGrab.isSelected)
             {

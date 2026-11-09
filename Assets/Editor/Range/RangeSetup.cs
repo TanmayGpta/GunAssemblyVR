@@ -44,10 +44,15 @@ namespace VRArmory.Editor
             firing.functionCheck = functionCheck;
             firing.frameGrab = frameGrab;
             firing.effects = effects;
+            firing.ammo = SetupMagazine(root, functionCheck, frameGrab);
             firing.kickAngle = 3f;    // hand + pistol turn together about the wrist
             firing.kickBack = 0.015f;
             firing.gunshot = LoadWeaponClip("Gunshot");
             if (firing.gunshot == null) Debug.LogWarning($"[VR Armory] No Gunshot audio file in {WeaponAudioFolder}: shots will be silent.");
+
+            RangeScoring scoring = GetOrAdd<RangeScoring>(root);
+            scoring.firing = firing;
+            EditorUtility.SetDirty(scoring);
 
             PlaceTargets();
 
@@ -56,6 +61,27 @@ namespace VRArmory.Editor
             EditorSceneManager.MarkSceneDirty(root.scene);
             EditorSceneManager.SaveScene(root.scene);
             Debug.Log("[VR Armory] Live firing set up: the pistol fires once its function check has passed (Play mode: Tools > VR Armory > Debug > Skip Assembly).");
+        }
+
+        // Chamber + magazine: the pistol's magazine part and the socket in its grip.
+        static PistolMagazine SetupMagazine(GameObject root, FunctionCheck functionCheck, VRAssemblyGrab frameGrab)
+        {
+            PistolMagazine ammo = GetOrAdd<PistolMagazine>(root);
+            ammo.functionCheck = functionCheck;
+            ammo.frameGrab = frameGrab;
+            ammo.magazine = null;
+            ammo.magazineWell = null;
+            foreach (AssemblyPart part in Object.FindObjectsOfType<AssemblyPart>(true))
+            {
+                if (part.partType == GunPart.Magazine) ammo.magazine = part;
+            }
+            foreach (SnapSocket socket in Object.FindObjectsOfType<SnapSocket>(true))
+            {
+                if (ammo.magazine != null && socket.acceptedPart == ammo.magazine) ammo.magazineWell = socket;
+            }
+            if (ammo.magazine == null || ammo.magazineWell == null) Debug.LogWarning("[VR Armory] Magazine part or its socket not found: the magazine cannot be released / reloaded.");
+            EditorUtility.SetDirty(ammo);
+            return ammo;
         }
 
         // Moves the dummies (nearest first) to TargetDistances and re-aims each one's ceiling spot light at it.

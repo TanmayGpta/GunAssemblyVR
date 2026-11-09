@@ -271,6 +271,13 @@ namespace VRArmory
             return $"MISALIGNED - {angle:0} deg OFF (MAX {snapAngle:0} deg). ROTATE TO MATCH THE GHOST";
         }
 
+        // Live fire: the magazine was released, so the well is empty and takes it (or a fresh one) again.
+        public void Empty()
+        {
+            IsFilled = false;
+            IsUnlocked = true;
+        }
+
         // Development shortcut (Skip Assembly): seats the accepted part as if it had been released here.
         public void DebugSeat()
         {

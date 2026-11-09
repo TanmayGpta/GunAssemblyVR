@@ -113,7 +113,9 @@ namespace VRArmory
 
         void Update()
         {
-            if (leftRepeat.WasPressedThisFrame() || rightRepeat.WasPressedThisFrame()) Repeat();
+            // B / Y of the hand holding the live pistol is its magazine release, not "repeat".
+            if ((leftRepeat.WasPressedThisFrame() && !PistolMagazine.OwnsSecondaryButton(true))
+                || (rightRepeat.WasPressedThisFrame() && !PistolMagazine.OwnsSecondaryButton(false))) Repeat();
 
             Cue cue = ReadCue(out int step);
             if (cue != CurrentCue || step != cueStep) Enter(cue, step);

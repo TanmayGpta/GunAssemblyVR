@@ -28,6 +28,10 @@ namespace VRArmory
 
         public event Action Completed;
         public event Action HammerFell;
+        // The slide was pulled back far enough to pick up a round (live fire chambers here).
+        public event Action SlideRacked;
+        // Live fire: the slide is held open on an empty magazine; the trigger does nothing until it is racked.
+        public bool SlideLocked => slideLocked;
         // Short event messages ("RESET", "DOUBLE ACTION - HAMMER FELL", ...) as they are shown on the HUD.
         public event Action<string> Notified;
         public bool IsRunning { get; private set; }
@@ -107,6 +111,7 @@ namespace VRArmory
         private Vector3 muzzleLocal = Vector3.forward;
         private Vector3 upLocal = Vector3.up;
         private Vector3 muzzleTipLocal;
+        private bool slideLocked;
         private float cycleTime = -1f; // live fire: seconds since the slide started its recoil cycle (-1 = not cycling)
         private bool rigBuilt;
         private AudioSource audioSource;
@@ -212,7 +217,7 @@ namespace VRArmory
                 return;
             }
 
-            if (needsReset) return;
+            if (needsReset || slideLocked) return; // slide open: out of battery, the trigger does nothing
             if (hammerCocked && pull >= 0.4f) DropHammer(false);
             else if (!hammerCocked && pull >= 1f && slideAmount < 0.05f) DropHammer(true);
         }
@@ -223,6 +228,8 @@ namespace VRArmory
             slideAmount = amount;
             if (amount >= 0.7f && prev < 0.7f)
             {
+                slideLocked = false; // racking an open slide releases it
+                SlideRacked?.Invoke();
                 hammerCocked = !safetyOn; // on SAFE the hammer follows the slide back down
                 if (check == Check.RackHeld && triggerPull > 0.8f) rackedWhileHeld = true;
             }
@@ -241,9 +248,11 @@ namespace VRArmory
 
         // Live fire: the shot drives the slide back and forward again (re-cocking the hammer, like the real recoil
         // cycle). The trigger still has to be let out to its reset before the next shot (needsReset stays set).
-        public void CycleSlide()
+        // lockOpen: the magazine is empty, so its follower catches the slide and holds it open.
+        public void CycleSlide(bool lockOpen = false)
         {
             cycleTime = 0f;
+            if (lockOpen) slideLocked = true;
             if (!safetyOn) hammerCocked = true;
         }
 
@@ -316,7 +325,7 @@ namespace VRArmory
             hammer?.Apply(hammerAngle);
             trigger?.Apply(triggerPull * triggerPullAngle);
             lever?.Apply(safetyLeverAngle);
-            if (slideT != null) slideT.localPosition = Vector3.Lerp(slideRestLocal, slideBackLocal, Mathf.Max(slideAmount, CycleAmount()));
+            if (slideT != null) slideT.localPosition = Vector3.Lerp(slideRestLocal, slideBackLocal, Mathf.Max(slideAmount, CycleAmount(), slideLocked ? 1f : 0f));
         }
 
         private void BuildRig()

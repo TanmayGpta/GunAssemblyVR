@@ -32,6 +32,7 @@ namespace VRArmory
         private Transform homeParent;
         private Vector3 homeLocalPos;
         private Quaternion homeLocalRot;
+        private Vector3 homeLocalScale;
         private Renderer[] renderers;
         private Collider[] colliders;
         private int[] colliderLayers;
@@ -45,6 +46,7 @@ namespace VRArmory
             homeParent = transform.parent;
             homeLocalPos = transform.localPosition;
             homeLocalRot = transform.localRotation;
+            homeLocalScale = transform.localScale;
             renderers = GetComponentsInChildren<Renderer>();
             colliders = GetComponentsInChildren<Collider>();
             colliderLayers = new int[colliders.Length];
@@ -154,6 +156,29 @@ namespace VRArmory
         {
             claimedOnRelease = true;
             StartCoroutine(SeatRoutine(seat, duration, onSeated));
+        }
+
+        // Live fire: the magazine comes out of the grip again. Back under its bench parent, grabbable, where it is now.
+        public void Unseat()
+        {
+            if (!IsSeated) return;
+            StopAllCoroutines();
+            isAnimating = false;
+            transform.SetParent(homeParent, true);
+            transform.localScale = homeLocalScale;
+            IsSeated = false;
+            foreach (Collider c in colliders) c.enabled = true;
+        }
+
+        // Straight to its place on the bench, no flight (a fresh magazine appearing there).
+        public void SnapHome()
+        {
+            StopAllCoroutines();
+            isAnimating = false;
+            transform.SetParent(homeParent, false);
+            transform.localPosition = homeLocalPos;
+            transform.localRotation = homeLocalRot;
+            transform.localScale = homeLocalScale;
         }
 
         public void ReturnHome()
