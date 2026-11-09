@@ -26,6 +26,13 @@ namespace VRArmory
 
         public AssemblyPart Part { get; private set; }
 
+        // Recoil kick of the held pistol (set by PistolFiring each frame): turn kickAngle degrees about kickAxisLocal and
+        // shift by kickOffsetLocal, both in this part's local space. VRControllerHands applies it to the controller hand
+        // AND the pistol's attach point together, so hand and pistol move as one (fingers stay on the grip).
+        [System.NonSerialized] public float kickAngle;
+        [System.NonSerialized] public Vector3 kickAxisLocal = Vector3.right;
+        [System.NonSerialized] public Vector3 kickOffsetLocal;
+
         private SnapSocket targetSocket;   // the socket this part fits into (none for the frame)
         private SnapSocket.Alignment lastAlignment;
         private IXRSelectInteractor lastHand;

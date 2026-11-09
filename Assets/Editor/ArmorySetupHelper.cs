@@ -488,7 +488,7 @@ namespace VRArmory.Editor
         // =========================================================
         private const float BoothWidth = 1.5f;
         private static readonly float[] BoothCenterX = { -1.5f, 0f, 1.5f };
-        private static readonly float[] TargetDistance = { 10f, 15f, 25f };
+        private static readonly float[] TargetDistance = { 6f, 10f, 15f }; // keep in step with RangeSetup.TargetDistances
         private static readonly string[] TargetLabel = { "Near", "Mid", "Far" };
         private const float FiringLineZ = 9.5f;
         private const float BackstopZ = 35.0f;

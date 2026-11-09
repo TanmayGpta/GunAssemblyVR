@@ -271,6 +271,15 @@ namespace VRArmory
             return $"MISALIGNED - {angle:0} deg OFF (MAX {snapAngle:0} deg). ROTATE TO MATCH THE GHOST";
         }
 
+        // Development shortcut (Skip Assembly): seats the accepted part as if it had been released here.
+        public void DebugSeat()
+        {
+            if (IsFilled || acceptedPart == null) return;
+            IsFilled = true;
+            HideGhost();
+            acceptedPart.SeatInto(transform, 0.05f, OnSnapComplete);
+        }
+
         private void OnSnapComplete()
         {
             confirmTimer = ConfirmDuration;

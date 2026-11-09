@@ -361,6 +361,26 @@ namespace VRArmory
             float palmSide = Mathf.Sign((Quaternion.Inverse(pistolRot) * dorsal).x);
             s.pistolAttach.localRotation = pistolRot * Quaternion.Euler(0f, -palmSide * gripYaw, 0f);
             s.pistolAttach.localPosition = positionOffset + s.pistolAttach.localRotation * pistolHoldOffset;
+            ApplyRecoil(s);
+        }
+
+        // Live-fire recoil: hand and pistol attach turn and shift together as one rigid piece (the pistol follows its
+        // attach point), pivoting at the wrist a little behind the grip, so nothing moves on its own.
+        static void ApplyRecoil(Side s)
+        {
+            VRAssemblyGrab gun = s.pistol;
+            if (gun == null || (gun.kickAngle == 0f && gun.kickOffsetLocal == Vector3.zero)) return;
+            Transform c = s.controller.transform;
+            Vector3 axis = c.InverseTransformDirection(gun.transform.TransformDirection(gun.kickAxisLocal)).normalized;
+            Vector3 offset = c.InverseTransformVector(gun.transform.TransformVector(gun.kickOffsetLocal));
+            Quaternion turn = Quaternion.AngleAxis(gun.kickAngle, axis);
+            Vector3 back = offset.sqrMagnitude > 1e-10f ? offset.normalized : Vector3.zero;
+            Vector3 wrist = s.pistolAttach.localPosition + back * 0.07f;
+            foreach (Transform t in new[] { s.root, s.pistolAttach })
+            {
+                t.localPosition = wrist + turn * (t.localPosition - wrist) + offset;
+                t.localRotation = turn * t.localRotation;
+            }
         }
 
         // The rig's controller models (spawned by the controllers on their first update) stay hidden.

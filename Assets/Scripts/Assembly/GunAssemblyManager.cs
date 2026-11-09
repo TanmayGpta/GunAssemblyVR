@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -111,6 +112,29 @@ namespace VRArmory
             if (HasStarted) return;
             HasStarted = true;
             BeginStep(0);
+        }
+
+        // Development shortcut (Tools > VR Armory > Debug > Skip Assembly, Play mode): seats every part in order and
+        // passes the function check, so live fire can be tested without assembling the pistol each time.
+        public void DebugCompleteAll()
+        {
+            if (!IsComplete) StartCoroutine(DebugCompleteRoutine());
+        }
+
+        private IEnumerator DebugCompleteRoutine()
+        {
+            BeginTraining();
+            while (!IsComplete && CurrentStep != null)
+            {
+                AssemblyStep step = CurrentStep;
+                if (!step.completed)
+                {
+                    if (step.socket != null) step.socket.DebugSeat();
+                    else if (step.functionCheck != null) step.functionCheck.DebugPass(hud);
+                    else yield break; // a step with nothing to do: leave it to the trainee
+                }
+                yield return null;
+            }
         }
 
         void Update()

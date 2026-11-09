@@ -40,6 +40,14 @@ namespace VRArmory
         public float TriggerPull => triggerPull;
         public float SlideAmount => slideAmount;
         public Vector3 SlideRearDirection => frame != null ? frame.transform.TransformDirection(-muzzleLocal) : Vector3.back;
+        // Live fire (PistolFiring): the front of the slide and the bore direction, in world space; and the same axes in
+        // frame space (muzzle, up = frame -> slide). Valid once the rig is built (HasRig).
+        public Vector3 MuzzlePosition => frame != null ? frame.transform.TransformPoint(muzzleTipLocal) : Vector3.zero;
+        public Vector3 MuzzleDirection => frame != null ? frame.transform.TransformDirection(muzzleLocal).normalized : Vector3.forward;
+        public Vector3 MuzzleLocal => muzzleLocal;
+        public Vector3 UpLocal => upLocal;
+        [Tooltip("Live fire: seconds for the slide to fly back and return after a shot.")]
+        public float cycleDuration = 0.09f;
         // Letting the trigger out past this point (from a full pull) resets it with a click.
         public const float TriggerResetPoint = 0.3f;
 
@@ -97,6 +105,9 @@ namespace VRArmory
         private Transform slideT;
         private Vector3 slideRestLocal, slideBackLocal;
         private Vector3 muzzleLocal = Vector3.forward;
+        private Vector3 upLocal = Vector3.up;
+        private Vector3 muzzleTipLocal;
+        private float cycleTime = -1f; // live fire: seconds since the slide started its recoil cycle (-1 = not cycling)
         private bool rigBuilt;
         private AudioSource audioSource;
         private AudioClip fallClip, resetClip, leverClip;
@@ -228,6 +239,43 @@ namespace VRArmory
             }
         }
 
+        // Live fire: the shot drives the slide back and forward again (re-cocking the hammer, like the real recoil
+        // cycle). The trigger still has to be let out to its reset before the next shot (needsReset stays set).
+        public void CycleSlide()
+        {
+            cycleTime = 0f;
+            if (!safetyOn) hammerCocked = true;
+        }
+
+        // How far back the slide is in its recoil cycle: fast back, a little slower forward.
+        private float CycleAmount()
+        {
+            if (cycleTime < 0f) return 0f;
+            cycleTime += Time.deltaTime;
+            float back = cycleDuration * 0.35f;
+            if (cycleTime < back) return cycleTime / back;
+            float k = (cycleTime - back) / Mathf.Max(0.001f, cycleDuration - back);
+            if (k >= 1f)
+            {
+                cycleTime = -1f;
+                return 0f;
+            }
+            return 1f - k;
+        }
+
+        // Development shortcut (Tools > VR Armory > Debug > Skip Assembly): passes the check at once.
+        public void DebugPass(AssemblyHUD targetHud)
+        {
+            if (Passed) return;
+            if (!IsRunning) Begin(targetHud);
+            if (!IsRunning) return;
+            safetyOn = false;
+            hammerCocked = false;
+            needsReset = false;
+            check = Check.SingleAction;
+            Advance();
+        }
+
         private void DropHammer(bool doubleAction)
         {
             hammerCocked = false;
@@ -268,7 +316,7 @@ namespace VRArmory
             hammer?.Apply(hammerAngle);
             trigger?.Apply(triggerPull * triggerPullAngle);
             lever?.Apply(safetyLeverAngle);
-            if (slideT != null) slideT.localPosition = Vector3.Lerp(slideRestLocal, slideBackLocal, slideAmount);
+            if (slideT != null) slideT.localPosition = Vector3.Lerp(slideRestLocal, slideBackLocal, Mathf.Max(slideAmount, CycleAmount()));
         }
 
         private void BuildRig()
@@ -287,6 +335,8 @@ namespace VRArmory
             Vector3 up = Cardinal(upRaw);
             Vector3 lateral = Vector3.Cross(muzzle, up).normalized;
             muzzleLocal = muzzle;
+            upLocal = up;
+            muzzleTipLocal = sb.center + muzzle * Vector3.Dot(sb.extents, Abs(muzzle));
 
             slideBackLocal = slideRestLocal - muzzle * (slideTravel / f.lossyScale.x);
 
