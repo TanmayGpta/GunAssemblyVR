@@ -42,7 +42,23 @@ namespace VRArmory
         public Image feedbackDot;
         public Text feedbackText;
         public Image[] progressSegments;
+        [Tooltip("Width the progress segments share, canvas units.")]
+        public float progressWidth = 704f;
         public Button restartButton;
+        [Tooltip("Training screen: back to the weapon cards.")]
+        public Button changeWeaponButton;
+
+        [Header("Weapon choice (between the modules and the briefing)")]
+        public GameObject weaponPanel;
+        [Tooltip("One per card, in card order.")]
+        public WeaponKit[] weaponKits = new WeaponKit[0];
+        public Button[] weaponCards = new Button[0];
+        [Tooltip("One per card: the centre of the picture area (a child of the card).")]
+        public Transform[] weaponModelSpots = new Transform[0];
+        public Text[] weaponPills = new Text[0];
+        public Button weaponBackButton;
+        [Tooltip("The weapon's picture is fitted inside this box on the card, metres.")]
+        public Vector2 weaponModelBox = new Vector2(0.27f, 0.105f);
         [Tooltip("Plays the current spoken instruction (and its demonstration) again. Wired by VRTrainingCoach.")]
         public Button repeatButton;
 
@@ -64,6 +80,9 @@ namespace VRArmory
 
         // Set before the scene reload of "Train again" / "Restart", so the new scene goes straight to step 1.
         private static bool startTrainingAfterReload;
+        // Set before the scene reload that swaps the weapon on the bench, so the new scene opens on the briefing.
+        private static bool showBriefingAfterReload;
+        private readonly System.Collections.Generic.List<GameObject> weaponModels = new System.Collections.Generic.List<GameObject>();
 
         private GameObject shownPanel;
         private float screenFade;
@@ -96,7 +115,16 @@ namespace VRArmory
             shootingModuleButton.onClick.AddListener(OnShootingModule);
             comingSoonBackButton.onClick.AddListener(() => Show(modulesPanel));
             startButton.onClick.AddListener(OnStartPressed);
-            introBackButton.onClick.AddListener(() => Show(modulesPanel));
+            introBackButton.onClick.AddListener(() => Show(weaponPanel != null ? weaponPanel : modulesPanel));
+            for (int i = 0; i < weaponCards.Length; i++)
+            {
+                int index = i;
+                if (weaponCards[i] != null) weaponCards[i].onClick.AddListener(() => PickWeapon(index));
+            }
+            // Back from the cards: to the training in progress if there is one, otherwise to the modules.
+            if (weaponBackButton != null)
+                weaponBackButton.onClick.AddListener(() => Show(manager.HasStarted && !manager.IsComplete ? progressPanel : modulesPanel));
+            if (changeWeaponButton != null) changeWeaponButton.onClick.AddListener(() => Show(weaponPanel));
             restartButton.onClick.AddListener(Restart);
             trainAgainButton.onClick.AddListener(Restart);
             modulesButton.onClick.AddListener(() => Show(modulesPanel));
@@ -109,9 +137,28 @@ namespace VRArmory
             stepClip = ProceduralAudio.MakeChime("Step_Done", 0.09f, 0.35f, 660f, 990f);
             bigClip = ProceduralAudio.MakeChime("Module_Done", 0.11f, 0.4f, 523f, 659f, 784f, 1047f);
 
+            LayoutProgressSegments();
             startPending = startTrainingAfterReload;
             startTrainingAfterReload = false;
-            Show(startPending ? progressPanel : modulesPanel);
+            bool briefing = showBriefingAfterReload;
+            showBriefingAfterReload = false;
+            Show(startPending ? progressPanel : briefing ? introPanel : modulesPanel);
+        }
+
+        // One segment per step of the chosen weapon, sharing the width; spare segments are hidden.
+        private void LayoutProgressSegments()
+        {
+            int count = Mathf.Min(manager.steps.Count, progressSegments.Length);
+            const float gap = 8f;
+            float w = count > 0 ? (progressWidth - gap * (count - 1)) / count : 0f;
+            for (int i = 0; i < progressSegments.Length; i++)
+            {
+                progressSegments[i].gameObject.SetActive(i < count);
+                if (i >= count) continue;
+                RectTransform rt = progressSegments[i].rectTransform;
+                rt.anchoredPosition = new Vector2(-progressWidth * 0.5f + w * 0.5f + i * (w + gap), rt.anchoredPosition.y);
+                rt.sizeDelta = new Vector2(w, rt.sizeDelta.y);
+            }
         }
 
         void OnEnable()
@@ -166,9 +213,56 @@ namespace VRArmory
 
         private void OnAssemblyModule()
         {
-            if (manager.IsComplete) Restart();              // train again from a fresh bench
-            else if (manager.HasStarted) Show(progressPanel); // continue where the trainee left off
+            if (manager.HasStarted && !manager.IsComplete) Show(progressPanel); // continue where the trainee left off
+            else if (weaponPanel != null) Show(weaponPanel);                    // choose (or choose again) what to build
+            else if (manager.IsComplete) Restart();
             else Show(introPanel);
+        }
+
+        // A weapon card. The weapon already on the bench and untouched: on to the briefing. Otherwise the scene is
+        // loaded again with the chosen weapon's parts on the bench: the same weapon starts at step 1 at once (train
+        // again), a different one opens on the briefing.
+        private void PickWeapon(int index)
+        {
+            if (index >= weaponKits.Length || weaponKits[index] == null) return;
+            WeaponKit kit = weaponKits[index];
+            WeaponKitSwitch kits = WeaponKitSwitch.Instance;
+            bool onBench = kits == null || kits.Active == kit;
+            if (onBench && !manager.HasStarted)
+            {
+                Show(introPanel);
+                return;
+            }
+            if (onBench && !manager.IsComplete)
+            {
+                Show(progressPanel);
+                return;
+            }
+            WeaponKitSwitch.Choose(kit);
+            if (onBench) startTrainingAfterReload = true;
+            else showBriefingAfterReload = true;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
+        // Card footer (parts, best time) and the assembled weapon's picture, while the cards are on screen.
+        private void RefreshWeaponCards()
+        {
+            for (int i = 0; i < weaponKits.Length; i++)
+            {
+                WeaponKit kit = weaponKits[i];
+                if (kit == null) continue;
+                if (i < weaponPills.Length && weaponPills[i] != null)
+                    Set(weaponPills[i], VRTrainingText.WeaponCardPill(kit.PartCount, kit.BestSeconds));
+                if (weaponModels.Count > i || i >= weaponModelSpots.Length) continue;
+                weaponModels.Add(kit.BuildAssembledCopy(weaponModelSpots[i], weaponModelBox));
+            }
+        }
+
+        private void ClearWeaponModels()
+        {
+            foreach (GameObject go in weaponModels)
+                if (go != null) Destroy(go);
+            weaponModels.Clear();
         }
 
         private void OnStartPressed()
@@ -207,11 +301,13 @@ namespace VRArmory
 
         private void Show(GameObject panel)
         {
-            foreach (GameObject p in new[] { modulesPanel, comingSoonPanel, introPanel, progressPanel, completePanel })
-                p.SetActive(p == panel);
+            foreach (GameObject p in new[] { modulesPanel, comingSoonPanel, weaponPanel, introPanel, progressPanel, completePanel })
+                if (p != null) p.SetActive(p == panel);
             shownPanel = panel;
             screenFade = 0f;
             if (panel == progressPanel) RefreshTraining(true);
+            if (panel == weaponPanel && weaponPanel != null) RefreshWeaponCards();
+            else ClearWeaponModels();
         }
 
         // Reloading the scene is the cleanest reset: every part, socket and the function check start fresh.
@@ -284,6 +380,8 @@ namespace VRArmory
         {
             int seconds = Mathf.FloorToInt(manager.ElapsedSeconds);
             resultText.text = VRTrainingText.Result(seconds, manager.MistakeCount);
+            if (WeaponKitSwitch.Instance != null && WeaponKitSwitch.Instance.Active != null)
+                WeaponKitSwitch.Instance.Active.ReportTime(seconds);
             Show(completePanel);
             Play(bigClip, 0.6f);
             pop = 1f;
@@ -361,7 +459,8 @@ namespace VRArmory
                 GunPart part = step.socket.acceptedPart.partType;
                 if (guidance.CurrentPhase == VRGuidance.Phase.Place)
                 {
-                    title = VRTrainingText.Place(part);
+                    WeaponKitSwitch kits = WeaponKitSwitch.Instance;
+                    title = VRTrainingText.Place(part, kits != null && kits.Active != null ? kits.Active.id : null);
                     detail = VRTrainingText.PlaceDetail;
                     feedback = VRGuidance.CorrectionText(guidance.CurrentCorrection);
                     kind = guidance.CurrentCorrection == VRGuidance.Correction.Aligned ? Feedback.Success

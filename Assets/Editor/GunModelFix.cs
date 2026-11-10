@@ -95,6 +95,7 @@ namespace VRArmory.Editor
             Transform slideDetail = ResetGroup(slide);
             Block(slideDetail, slide, slideOrigin, "Slide_Breech_Fill", new Vector3(14f, -18.5f, 50f), new Vector3(66f, 1.6f, 65f), 0f);
             Block(slideDetail, slide, slideOrigin, "Slide_Rear_Fill", new Vector3(66f, -18.5f, 50f), new Vector3(80f, 1.6f, 56f), 0f);
+            SlideTop(slideDetail, slide, slideOrigin);
 
             // --- Colliders and bench contact follow the new shapes (positions on the bench otherwise unchanged) ---
             float matTop = mat.GetComponent<Renderer>().bounds.max.y;
@@ -107,6 +108,52 @@ namespace VRArmory.Editor
 
             Debug.Log("[VR Armory] Gun model fixed: pieces re-seated, slide lowered onto the rails, static filler added.");
             return true;
+        }
+
+        // Only the rounded top of the slide's front half, without touching anything else. The slide mesh is cut open
+        // between the front sight and the breech and the barrel sits below the cut, so the gun looked notched there.
+        [MenuItem("Tools/VR Armory/Fix Gun Model (slide front top only)")]
+        public static void SlideTopFromMenu()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            GameObject go = GameObject.Find("02_Upper_Slide");
+            Transform slide = go != null ? go.transform : null;
+            Transform slideBody = slide != null ? slide.Find("Slide_Body") : null;
+            Transform detail = slide != null ? slide.Find(DetailGroup) : null;
+            if (slideBody == null || detail == null)
+            {
+                Debug.LogError("[VR Armory] Fix Gun Model: 02_Upper_Slide, Slide_Body or Static_Detail not found.");
+                return;
+            }
+            SlideTop(detail, slide, Min(slideBody, slide) - Mm(SlideMin));
+            var scene = EditorSceneManager.GetActiveScene();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("[VR Armory] Gun model: slide front top added.");
+        }
+
+        static void SlideTop(Transform group, Transform module, Vector3 origin)
+        {
+            Transform old = group.Find("Slide_Front_Top");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            Round(group, module, origin, "Slide_Front_Top", new Vector3(-103.6f, -18.8f, 50.1f), new Vector3(-1.1f, 1.8f, 73.1f));
+        }
+
+        // A round bar lying along the bore, filling the box between two corners (its ends are hidden inside the slide).
+        static void Round(Transform group, Transform module, Vector3 origin, string name, Vector3 min, Vector3 max)
+        {
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            Object.DestroyImmediate(go.GetComponent<Collider>());
+            go.transform.SetParent(group, false);
+            go.transform.rotation = module.rotation * Quaternion.Euler(0f, 0f, -90f); // cylinder axis (Y) -> bore (X)
+            go.transform.position = module.position + module.rotation * (origin + Mm((min + max) * 0.5f));
+            Vector3 world = Mm(max - min), scale = group.lossyScale;
+            // cylinder: 1 wide, 2 long. Its X lies across the gun, Y along the bore, Z up.
+            go.transform.localScale = new Vector3(world.y / scale.y, world.x * 0.5f / scale.x, world.z / scale.z);
+
+            Renderer source = module.Find("Slide_Body").GetComponent<Renderer>();
+            go.GetComponent<Renderer>().sharedMaterial = source.sharedMaterial;
         }
 
         static Vector3 Mm(Vector3 v) => v * 0.001f;

@@ -259,8 +259,13 @@ namespace VRArmory
             }
         }
 
+        // The recorded assembly lines describe the Beretta; another weapon's steps stay silent until it has its own.
+        private static bool BerettaOnBench =>
+            WeaponKitSwitch.Instance == null || WeaponKitSwitch.Instance.Active == null || WeaponKitSwitch.Instance.Active.id == "beretta92";
+
         private static VoiceLine PickLine(GunPart part)
         {
+            if (!BerettaOnBench) return VoiceLine.None;
             switch (part)
             {
                 case GunPart.Barrel: return VoiceLine.Asm_Pick_Barrel;
@@ -273,6 +278,7 @@ namespace VRArmory
 
         private static VoiceLine PlaceLine(GunPart part)
         {
+            if (!BerettaOnBench) return VoiceLine.None;
             switch (part)
             {
                 case GunPart.Barrel: return VoiceLine.Asm_Place_Barrel;

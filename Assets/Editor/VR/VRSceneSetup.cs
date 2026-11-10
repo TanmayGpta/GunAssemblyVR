@@ -79,6 +79,8 @@ namespace VRArmory.Editor
                 return false;
             }
             FunctionCheck functionCheck = manager.GetComponent<FunctionCheck>();
+            // Every weapon on while building (bounds of inactive renderers are empty); all but the first are saved off.
+            foreach (WeaponKit k in Object.FindObjectsOfType<WeaponKit>(true)) k.gameObject.SetActive(true);
 
             GameObject root = FindOrCreate(null, RootName);
             Transform content = FindOrCreate(root.transform, ContentName).transform;
@@ -249,11 +251,11 @@ namespace VRArmory.Editor
             var grabs = new List<VRAssemblyGrab>();
             VRAssemblyGrab frameGrab = null;
             foreach (AssemblyPart part in Object.FindObjectsOfType<AssemblyPart>(true))
-            {
-                VRAssemblyGrab grab = ConfigurePart(part, interactionManager);
-                grabs.Add(grab);
-                if (part.partType == GunPart.LowerFrame) frameGrab = grab;
-            }
+                grabs.Add(ConfigurePart(part, interactionManager));
+
+            // --- Weapon kits: the Beretta's (its steps are the manager's) first, then any other kit in the scene ---
+            WeaponKit[] kits = SetupKits(manager, functionCheck);
+            if (kits.Length > 0 && kits[0].frame != null) frameGrab = kits[0].frame.GetComponent<VRAssemblyGrab>();
 
             // Teleport objects from earlier versions.
             foreach (string oldName in new[] { "Teleport_Floor", "Bench_Teleport_Anchor" })
@@ -285,7 +287,7 @@ namespace VRArmory.Editor
             guidance.lineMaterial = GetOrCreateGuideMaterial();
             guidance.roundedSprite = RoundedSprite;
 
-            VRTrainingMenu menu = BuildMenu(content, manager, functionCheck, guidance, xrCamera);
+            VRTrainingMenu menu = BuildMenu(content, manager, functionCheck, guidance, xrCamera, kits);
 
             // v1.2: ghost demonstrations of the slide / trigger movements, and the spoken instructor.
             VRGhostDemo ghostDemo = GetOrAdd<VRGhostDemo>(FindOrCreate(content, "VR_Ghost_Demo"));
@@ -309,6 +311,17 @@ namespace VRArmory.Editor
             coach.voice = voice;
             coach.ghost = ghostDemo;
 
+            // Chosen at run time: the switch points all of the above at the kit on the bench.
+            WeaponKitSwitch kitSwitch = GetOrAdd<WeaponKitSwitch>(manager.gameObject);
+            kitSwitch.kits = kits;
+            kitSwitch.manager = manager;
+            kitSwitch.menu = menu;
+            kitSwitch.guidance = guidance;
+            kitSwitch.coach = coach;
+            kitSwitch.ghostDemo = ghostDemo;
+            kitSwitch.functionCheckControls = fcControls;
+            EditorUtility.SetDirty(kitSwitch);
+
             QuestPerformanceSettings perf = GetOrAdd<QuestPerformanceSettings>(FindOrCreate(content, "Quest_Performance"));
             perf.keepShadows = FindLights("Directional Light", "Workbench_Ceiling_Light");
 
@@ -325,9 +338,41 @@ namespace VRArmory.Editor
 
             foreach (Object o in new Object[] { menu, guidance, fcControls, ghostDemo, voice, coach, perf, audio, platformSwitch }) EditorUtility.SetDirty(o);
             content.gameObject.SetActive(false); // desktop mode never sees the VR objects
+            for (int i = 1; i < kits.Length; i++) kits[i].gameObject.SetActive(false);
             Debug.Log($"[VR Armory] VR scene setup done: {grabs.Count} grabbable parts, XR rig at {BenchStandPoint}, training panel, guidance, smooth locomotion, moving targets, function-check controls, "
                       + $"ghost demonstrations, voice guide ({voice.clips.Length - missingVoice.Count}/{voice.clips.Length} lines recorded).");
             return true;
+        }
+
+        // The Beretta's kit sits on its staged parts group and takes the manager's step list; other weapons bring their
+        // own kit (built by their own setup menu) and are only collected here.
+        static WeaponKit[] SetupKits(GunAssemblyManager manager, FunctionCheck functionCheck)
+        {
+            var kits = new List<WeaponKit>();
+            GameObject station = GameObject.Find("ArmorerStation");
+            Transform parts = station != null ? station.transform.Find("Staged_Gun_Parts") : null;
+            if (parts == null)
+            {
+                Debug.LogWarning("[VR Armory] ArmorerStation/Staged_Gun_Parts not found: no weapon kit for the Beretta.");
+            }
+            else
+            {
+                WeaponKit beretta = GetOrAdd<WeaponKit>(parts.gameObject);
+                beretta.id = "beretta92";
+                beretta.displayName = "Beretta 92 FS";
+                beretta.hudSubtitle = "BERETTA 92 FS 9MM NATO  |  FM 3-23.35 REASSEMBLY SEQUENCE";
+                beretta.functionCheck = functionCheck;
+                beretta.steps = new List<AssemblyStep>(manager.steps);
+                beretta.muzzleLocal = Vector3.left;   // frame axes, see GunModelFix
+                beretta.upLocal = Vector3.forward;
+                foreach (AssemblyPart part in parts.GetComponentsInChildren<AssemblyPart>(true))
+                    if (part.partType == GunPart.LowerFrame) beretta.frame = part;
+                EditorUtility.SetDirty(beretta);
+                kits.Add(beretta);
+            }
+            foreach (WeaponKit kit in Object.FindObjectsOfType<WeaponKit>(true))
+                if (!kits.Contains(kit)) kits.Add(kit);
+            return kits.ToArray();
         }
 
         static VRAssemblyGrab ConfigurePart(AssemblyPart part, XRInteractionManager interactionManager)
@@ -363,7 +408,7 @@ namespace VRArmory.Editor
             grab.startingSingleGrabTransformers = new List<XRBaseGrabTransformer> { transformer };
             grab.startingMultipleGrabTransformers = new List<XRBaseGrabTransformer> { transformer };
             // Frame and slide are the large sub-assemblies: a second hand may join to turn them.
-            bool twoHanded = part.partType == GunPart.LowerFrame || part.partType == GunPart.UpperSlide;
+            bool twoHanded = part.partType == GunPart.LowerFrame || part.partType == GunPart.UpperSlide || part.partType == GunPart.UpperReceiver;
             grab.selectMode = twoHanded ? InteractableSelectMode.Multiple : InteractableSelectMode.Single;
             grab.enabled = false; // VRPlatformSwitch enables it when a headset is running
             EditorUtility.SetDirty(transformer);
@@ -409,7 +454,7 @@ namespace VRArmory.Editor
 
         // ---------- Training panel (the one world-space panel, in front of the bench) ----------
 
-        static VRTrainingMenu BuildMenu(Transform content, GunAssemblyManager manager, FunctionCheck functionCheck, VRGuidance guidance, Camera eventCamera)
+        static VRTrainingMenu BuildMenu(Transform content, GunAssemblyManager manager, FunctionCheck functionCheck, VRGuidance guidance, Camera eventCamera, WeaponKit[] kits)
         {
             GameObject old = content.Find("VR_Training_Menu")?.gameObject;
             if (old != null) Object.DestroyImmediate(old); // our own object: rebuilt so layout changes apply
@@ -439,12 +484,37 @@ namespace VRArmory.Editor
 
             BuildModules(go.transform, menu);
             BuildComingSoon(go.transform, menu);
+            BuildWeapons(go.transform, menu, kits);
             BuildIntro(go.transform, menu);
-            BuildTraining(go.transform, menu, manager.steps.Count);
+            BuildTraining(go.transform, menu);
             BuildComplete(go.transform, menu);
 
-            foreach (GameObject p in new[] { menu.comingSoonPanel, menu.introPanel, menu.progressPanel, menu.completePanel }) p.SetActive(false);
+            foreach (GameObject p in new[] { menu.comingSoonPanel, menu.weaponPanel, menu.introPanel, menu.progressPanel, menu.completePanel }) p.SetActive(false);
             return menu;
+        }
+
+        // One card per weapon kit, like the range's weapon cards: name, the assembled weapon's picture (made at run time),
+        // and a footer with the part count and the best time.
+        static void BuildWeapons(Transform root, VRTrainingMenu menu, WeaponKit[] kits)
+        {
+            Transform p = (menu.weaponPanel = Panel(root, "Weapon_Panel")).transform;
+            Left(p, "Label", VRTrainingText.IntroLabel, 18, Accent, 192f, FontStyle.Bold);
+            Left(p, "Title", VRTrainingText.WeaponSelectTitle, 40, TextPrimary, 150f, FontStyle.Bold, 56f);
+
+            int n = kits.Length;
+            menu.weaponKits = kits;
+            menu.weaponCards = new Button[n];
+            menu.weaponModelSpots = new Transform[n];
+            menu.weaponPills = new Text[n];
+            for (int i = 0; i < n; i++)
+            {
+                float x = (i - (n - 1) * 0.5f) * 356f;
+                menu.weaponCards[i] = RangeSetup.WeaponCard(p, $"Weapon_{i + 1:00}_Card", new Vector2(x, -32f), $"{i + 1:00}", kits[i].displayName,
+                    VRTrainingText.WeaponCardPill(kits[i].PartCount, 0), out menu.weaponModelSpots[i]);
+                Transform pill = menu.weaponCards[i].transform.Find("Status/Text");
+                menu.weaponPills[i] = pill != null ? pill.GetComponent<Text>() : null;
+            }
+            menu.weaponBackButton = MakeButton(p, "Back_Button", VRTrainingText.Back, new Vector2(-352f + 90f, -196f), new Vector2(180f, 52f), false);
         }
 
         static void BuildModules(Transform root, VRTrainingMenu menu)
@@ -496,8 +566,13 @@ namespace VRArmory.Editor
             menu.startButton = MakeButton(p, "Start_Button", VRTrainingText.StartTraining, new Vector2(352f - 140f, -182f), new Vector2(280f, 64f), true);
         }
 
-        static void BuildTraining(Transform root, VRTrainingMenu menu, int stepCount)
+        // Segments for the longest lesson any weapon has; the menu lays out as many as the chosen weapon has steps.
+        const int MaxSteps = 8;
+
+        static void BuildTraining(Transform root, VRTrainingMenu menu)
         {
+            const int stepCount = MaxSteps;
+            menu.progressWidth = ContentW;
             Transform p = (menu.progressPanel = Panel(root, "Progress_Panel")).transform;
             menu.stepText = Left(p, "Step", "", 18, Accent, 194f, FontStyle.Bold);
             menu.timerText = Label(p, "Timer", "00:00", 18, TextSecondary, new Vector2(0f, 194f), new Vector2(ContentW, 30f), TextAnchor.MiddleRight);
@@ -523,6 +598,8 @@ namespace VRArmory.Editor
             menu.restartButton = MakeButton(p, "Restart_Button", VRTrainingText.Restart, new Vector2(352f - 80f, -186f), new Vector2(160f, 52f), false);
             // Left of Restart: hear the current instruction (and see its demonstration) again.
             menu.repeatButton = MakeButton(p, "Repeat_Button", VRTrainingText.Repeat, new Vector2(352f - 160f - 12f - 100f, -186f), new Vector2(200f, 52f), false);
+            // Far left: back to the weapon cards (another weapon, or carry on with this one).
+            menu.changeWeaponButton = MakeButton(p, "Change_Weapon_Button", VRTrainingText.ChangeWeapon, new Vector2(-352f + 115f, -186f), new Vector2(230f, 52f), false);
         }
 
         static void BuildComplete(Transform root, VRTrainingMenu menu)
@@ -713,6 +790,9 @@ namespace VRArmory.Editor
                 else if (n == "Grip_Backstrap_Fill") { back = c; hasBack = true; }
                 else if (n == "Hammer") { hammer = c; hasHammer = true; }
             }
+            // A weapon whose own setup already placed the attach (TEC-9) keeps it.
+            if ((!any || !hasFront || !hasBack || !hasHammer) && frame.GetComponentInParent<WeaponKit>(true) is WeaponKit kit && kit.id != "beretta92")
+                return attach;
             if (!any || !hasFront || !hasBack || !hasHammer)
             {
                 Debug.LogWarning("[VR Armory] Grip pieces not found on the frame; the pistol will be held at its pivot.");

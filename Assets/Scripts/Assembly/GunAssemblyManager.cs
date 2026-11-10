@@ -38,6 +38,8 @@ namespace VRArmory
         public float messageHoldSeconds = 1.5f;
         [Tooltip("Text appended to the instruction when the socket's host is on the bench. {0} = host name.")]
         public string hostHint = "[F] HOLD {0} IN YOUR OFF HAND (OR WORK ON THE BENCH)";
+        [Tooltip("Second line of the HUD header. WeaponKitSwitch replaces it with the chosen weapon's.")]
+        public string hudSubtitle = "BERETTA 92 FS 9MM NATO  |  FM 3-23.35 REASSEMBLY SEQUENCE";
 
         public event Action<int> StepStarted;
         public event Action AllStepsCompleted;
@@ -95,7 +97,7 @@ namespace VRArmory
             timeRemaining = timeTrialSeconds;
             if (hud != null)
             {
-                hud.SetHeader("[ PHASE 02 : FIELD ASSEMBLY ]", "BERETTA 92 FS 9MM NATO  |  FM 3-23.35 REASSEMBLY SEQUENCE");
+                hud.SetHeader("[ PHASE 02 : FIELD ASSEMBLY ]", hudSubtitle);
                 hud.SetFooter(mode == AssemblyMode.GuidedTraining ? "MODE: GUIDED TRAINING" : "MODE: TIME TRIAL");
             }
             if (beginOnStart) BeginTraining();

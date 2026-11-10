@@ -435,6 +435,7 @@ namespace VRArmory.Tests
             yield return PressButton(R, menu.comingSoonBackButton);
             Check("v11-coming-soon-back", menu.modulesPanel.activeSelf && !menu.comingSoonPanel.activeSelf);
             yield return PressButton(R, menu.assemblyModuleButton);
+            yield return PressButton(R, menu.weaponCards[0]); // weapon cards come between the modules and the briefing
             Check("v11-assembly-module-opens-briefing", menu.introPanel.activeSelf && !mgr.HasStarted);
             yield return WaitFor(() => Said(VoiceLine.Intro_Briefing) > 0, 2f);
             Check("v12-briefing-spoken", Said(VoiceLine.Intro_Briefing) == 1 && Said(VoiceLine.Intro_ChooseModule) <= 1,
@@ -801,6 +802,7 @@ namespace VRArmory.Tests
 
             // ---- Restart: selecting the finished module trains again from a fresh bench (scene reload)
             yield return PressButton(R, menu.assemblyModuleButton);
+            yield return PressButton(R, menu.weaponCards[0]); // the weapon just built: train again
             yield return Hold(0.3f);
             FindScene();
             origin = FindObjectOfType<XROrigin>();

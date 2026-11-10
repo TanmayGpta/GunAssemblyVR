@@ -121,3 +121,9 @@ Assets/Characters/Ch15_nonPBR.fbx.meta
 # Textures unpacked from that model by the Intro setup
 Assets/Characters/Textures/
 Assets/Characters/Textures.meta
+# Claude Code project instructions
+CLAUDE.md
+# Raw downloaded models (unsimplified)
+_incoming/
+# TEC-9 model, textures and materials (local only)
+Assets/Models/tec9*

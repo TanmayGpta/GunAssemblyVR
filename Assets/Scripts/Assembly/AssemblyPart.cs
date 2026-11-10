@@ -5,7 +5,8 @@ using UnityEngine;
 
 namespace VRArmory
 {
-    public enum GunPart { LowerFrame, UpperSlide, Barrel, RecoilSpring, Magazine }
+    // Scenes store these as numbers: new values go at the end.
+    public enum GunPart { LowerFrame, UpperSlide, Barrel, RecoilSpring, Magazine, Bolt, TakedownPin, UpperReceiver }
 
     // Grabbable gun sub-assembly. Input-agnostic: the desktop interactor drives BeginGrab / MoveHeld / EndGrab,
     // and for Quest an XRGrabInteractable adapter only needs to call the same methods from selectEntered / selectExited.

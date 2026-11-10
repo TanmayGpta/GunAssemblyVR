@@ -28,6 +28,13 @@ namespace VRArmory
         public const string ComingSoonBody = "Aim and fire at targets on the range.\nThis module is being built and arrives in a future update.";
         public const string Back = "Back";
 
+        // ---------- Weapon choice ----------
+        public const string WeaponSelectTitle = "Choose a weapon to assemble";
+        public const string ChangeWeapon = "Change weapon";
+        public static string WeaponCardPill(int parts, int bestSeconds) => bestSeconds > 0
+            ? $"{parts} PARTS  ·  BEST {bestSeconds / 60:00}:{bestSeconds % 60:00}"
+            : $"{parts} PARTS  ·  NOT BUILT YET";
+
         // ---------- Briefing ----------
         public const string IntroLabel = "MODULE 01  ·  GUN ASSEMBLY";
         public const string IntroTitle = "How it works";
@@ -53,6 +60,9 @@ namespace VRArmory
                 case GunPart.RecoilSpring: return "recoil spring";
                 case GunPart.UpperSlide: return "slide";
                 case GunPart.Magazine: return "magazine";
+                case GunPart.Bolt: return "bolt";
+                case GunPart.TakedownPin: return "takedown pin";
+                case GunPart.UpperReceiver: return "upper receiver";
                 default: return "frame";
             }
         }
@@ -72,9 +82,31 @@ namespace VRArmory
                 case GunPart.RecoilSpring: return "Slide the spring in under the barrel";
                 case GunPart.UpperSlide: return "Put the slide onto the frame";
                 case GunPart.Magazine: return "Push the magazine into the grip";
+                case GunPart.Bolt: return "Slide the bolt into the back of the receiver";
+                case GunPart.TakedownPin: return "Push the pin through the front of the frame";
+                case GunPart.UpperReceiver: return "Put the upper receiver onto the frame";
                 default: return "Put it in place";
             }
         }
+
+        // Same, for the weapon on the bench ('weaponId' = WeaponKit.id) where its wording differs.
+        public static string Place(GunPart part, string weaponId)
+        {
+            if (weaponId == Tec9Id)
+            {
+                switch (part)
+                {
+                    case GunPart.RecoilSpring: return "Slide the spring unit in behind the bolt";
+                    case GunPart.Magazine: return "Push the magazine up into the magazine well";
+                }
+            }
+            return Place(part);
+        }
+
+        // ---------- TEC-9 ----------
+        public const string Tec9Id = "tec9";
+        public const string Tec9Name = "TEC-9";
+        public const string Tec9HudSubtitle = "INTRATEC TEC-9 9MM  |  FIELD REASSEMBLY SEQUENCE";
         public const string PlaceDetail = "Move it to the glowing outline. It clicks in when it lines up.";
 
         public static string WrongPart(GunPart held) => $"That's the {PartName(held)} - it comes later";

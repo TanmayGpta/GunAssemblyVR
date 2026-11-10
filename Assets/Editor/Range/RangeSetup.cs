@@ -342,7 +342,7 @@ namespace VRArmory.Editor
 
         // Weapon card (the whole card is the button, coloured like the training menu's module cards): name at the top,
         // the picture area for the gun's model in the middle ('modelSpot'), the magazine size at the bottom.
-        static Button WeaponCard(Transform parent, string name, Vector2 pos, string number, string title, string pill, out Transform modelSpot)
+        internal static Button WeaponCard(Transform parent, string name, Vector2 pos, string number, string title, string pill, out Transform modelSpot)
         {
             Vector2 size = new Vector2(340f, 250f);
             Image img = Rounded(parent, name, pos, size, Color.white, 0.4f);
