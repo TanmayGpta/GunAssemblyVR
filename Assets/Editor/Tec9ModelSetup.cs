@@ -59,20 +59,48 @@ namespace VRArmory.Editor
                 AssetDatabase.CreateAsset(material, path);
             }
 
-            material.SetTexture("_MainTex", LoadTexture(set, "BaseColor", false, false));
-            material.SetColor("_Color", Color.white);
+            // The downloaded colour and metal maps carry a worn, rusty finish: replaced by a clean factory finish
+            // (flat colour + metal/smoothness values). The normal map stays for the shape detail.
+            Finish f = FinishOf(set);
+            material.SetTexture("_MainTex", null);
+            material.SetColor("_Color", f.color);
 
             material.SetTexture("_BumpMap", LoadTexture(set, "Normal", true, false));
             material.EnableKeyword("_NORMALMAP");
 
-            // Metallic in RGB, smoothness in alpha.
-            material.SetTexture("_MetallicGlossMap", LoadTexture(set, "MetallicSmoothness", false, true));
-            material.EnableKeyword("_METALLICGLOSSMAP");
-            material.SetFloat("_GlossMapScale", 1f);
+            material.SetTexture("_MetallicGlossMap", null);
+            material.DisableKeyword("_METALLICGLOSSMAP");
+            material.SetFloat("_Metallic", f.metallic);
+            material.SetFloat("_Glossiness", f.smoothness);
             material.SetFloat("_SmoothnessTextureChannel", 0f);
 
             EditorUtility.SetDirty(material);
             return material;
+        }
+
+        // Finish per material set. Tune here, then re-run "1. Setup Model".
+        struct Finish
+        {
+            public Color color;
+            public float metallic, smoothness;
+            public Finish(float grey, float metallic, float smoothness)
+            {
+                color = new Color(grey, grey, grey * 1.04f); // a hint of cool blue in the black
+                this.metallic = metallic;
+                this.smoothness = smoothness;
+            }
+        }
+
+        static Finish FinishOf(string set)
+        {
+            switch (set)
+            {
+                case "Lower": return new Finish(0.17f, 0.0f, 0.32f);      // matte charcoal polymer
+                case "Mag": return new Finish(0.15f, 0.55f, 0.40f);       // black oxide steel, satin
+                case "Barrel": return new Finish(0.20f, 0.85f, 0.55f);    // gunmetal
+                case "Mechanism": return new Finish(0.22f, 0.80f, 0.50f); // gunmetal, slightly lighter
+                default: return new Finish(0.16f, 0.70f, 0.45f);          // receiver: satin black steel
+            }
         }
 
         static Texture2D LoadTexture(string set, string kind, bool normal, bool linear)
@@ -109,6 +137,29 @@ namespace VRArmory.Editor
         const float BerettaGripScale = 2.1903f;
         const float MatMargin = 0.08f;
         const float MinColliderSize = 0.03f;      // m, so the small pin is easy to grab
+        const float BoltTravel = 0.05f;           // m, how far the bolt moves back when racked
+        const float PinSnapAngle = 30f;           // deg (other sockets: 20), on the pin's axis only
+        const float PinSnapDistance = 0.07f;      // m (other sockets: 0.06)
+
+        // World point of the charging knob: the bolt vertices furthest out sideways from the receiver's centre line.
+        static Vector3 KnobPoint(Transform bolt, Vector3 receiverCentre, Vector3 lateral)
+        {
+            MeshFilter mf = bolt.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null || !mf.sharedMesh.isReadable) return bolt.position;
+            Vector3[] v = mf.sharedMesh.vertices;
+            float best = 0f;
+            foreach (Vector3 p in v) best = Mathf.Max(best, Mathf.Abs(Vector3.Dot(bolt.TransformPoint(p) - receiverCentre, lateral)));
+            Vector3 sum = Vector3.zero;
+            int n = 0;
+            foreach (Vector3 p in v)
+            {
+                Vector3 w = bolt.TransformPoint(p);
+                if (Mathf.Abs(Vector3.Dot(w - receiverCentre, lateral)) < best - 0.008f) continue;
+                sum += w;
+                n++;
+            }
+            return n > 0 ? sum / n : bolt.position;
+        }
 
         static readonly (string name, GunPart type)[] PartList =
         {
@@ -217,11 +268,41 @@ namespace VRArmory.Editor
                 socket.acceptedPart = assemblyParts[s.part];
                 socket.ghostTemplate = ghost;
                 socket.insertionDirection = socketT.InverseTransformDirection(s.from);
+                if (s.part == "05_Takedown_Pin")
+                {
+                    // A round pin: any turn about its length, either end first, fits. A little more forgiving on
+                    // angle and distance than the big parts, since it is small and sits inside the frame's lug.
+                    MeshFilter pinMesh = part.GetComponent<MeshFilter>();
+                    socket.symmetryAxis = pinMesh != null && pinMesh.sharedMesh != null ? LongestAxis(pinMesh.sharedMesh.bounds.size) : Vector3.up;
+                    socket.snapAngle = PinSnapAngle;
+                    socket.snapDistance = PinSnapDistance;
+                }
                 made[s.socket] = socket;
             }
 
+            // Rack handle: the charging knob, the bit of the bolt that sticks out furthest sideways from the receiver.
+            Transform bolt = parts["03_Bolt"];
+            Transform knob = new GameObject("Rack_Handle").transform;
+            knob.SetParent(bolt, false);
+            knob.position = KnobPoint(bolt, ub.center, lateral);
+
+            // Function check: no safety, single action, cocked once the bolt is in; the bolt is what racks.
+            FunctionCheck check = group.gameObject.AddComponent<FunctionCheck>();
+            check.frame = assemblyParts["01_Lower_Frame"];
+            check.slide = assemblyParts["03_Bolt"];
+            check.hasSafety = false;
+            check.doubleAction = false;
+            check.startCocked = true;
+            check.triggerPieceName = "Trigger";
+            check.hammerPieceName = "";
+            check.muzzleOverride = lower.InverseTransformDirection(muzzle);
+            check.rackHandle = knob;
+            check.slideTravel = BoltTravel;
+            check.rackControl = "[HOLD G (CHARGING KNOB), THEN RELEASE]";
+
             // Weapon kit (axes in frame space for the card picture, taken while the gun is still assembled).
             WeaponKit kit = group.gameObject.AddComponent<WeaponKit>();
+            kit.functionCheck = check;
             kit.id = VRTrainingText.Tec9Id;
             kit.displayName = VRTrainingText.Tec9Name;
             kit.hudSubtitle = VRTrainingText.Tec9HudSubtitle;
@@ -240,6 +321,8 @@ namespace VRArmory.Editor
                     instruction = "PUSH THE TAKEDOWN PIN THROUGH THE FRONT LUG" },
                 new AssemblyStep { title = "MAGAZINE INSERTED", part = GunPart.Magazine, socket = made["Socket_Magazine"],
                     instruction = "INSERT THE 32-ROUND MAGAZINE INTO THE MAGAZINE WELL" },
+                new AssemblyStep { title = "FUNCTION CHECK", part = GunPart.LowerFrame, functionCheck = check,
+                    instruction = "PERFORM THE FUNCTION CHECK" },
             };
 
             // Onto the bench: lying on its side, muzzle downrange (+Z), one row across the mat in part order.

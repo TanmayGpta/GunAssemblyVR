@@ -52,6 +52,26 @@ namespace VRArmory
         public Vector3 UpLocal => upLocal;
         [Tooltip("Live fire: seconds for the slide to fly back and return after a shot.")]
         public float cycleDuration = 0.09f;
+
+        [Header("Weapon")]
+        [Tooltip("Off: no manual safety. The check starts at the first trigger pull (stage 3), skipping the safety checks.")]
+        public bool hasSafety = true;
+        [Tooltip("Off: single action only - the trigger drops the hammer only once it is cocked.")]
+        public bool doubleAction = true;
+        [Tooltip("The hammer is cocked when the check starts (a single-action gun just put together with its bolt).")]
+        public bool startCocked;
+        [Tooltip("Name (contains) of the trigger mesh under the frame, and of the hammer (empty = no visible hammer).")]
+        public string triggerPieceName = "Trigger_Shoe";
+        public string hammerPieceName = "Hammer";
+        [Tooltip("Bore direction in frame space. Zero = worked out from the slide and its rear sight.")]
+        public Vector3 muzzleOverride;
+        [Tooltip("Optional: where the free hand grabs to rack (e.g. a charging knob, a child of the slide/bolt). " +
+                 "Empty = the rear of the slide.")]
+        public Transform rackHandle;
+
+        // First stage this weapon's check uses, and how many it has (for "CHECK 2 OF 4").
+        public int FirstStage => hasSafety ? 0 : (int)Check.DoubleAction;
+        public int StagesInCheck => StageCount - FirstStage;
         // Letting the trigger out past this point (from a full pull) resets it with a click.
         public const float TriggerResetPoint = 0.3f;
 
@@ -151,9 +171,13 @@ namespace VRArmory
                 Debug.LogWarning("[VR Armory] FunctionCheck needs frame and slide references.");
                 return;
             }
-            if (!rigBuilt) BuildRig();
+            if (!rigBuilt)
+            {
+                BuildRig();
+                hammerCocked = startCocked;
+            }
             IsRunning = true;
-            check = Check.SafeOn;
+            check = (Check)FirstStage;
             Say(null);
         }
 
@@ -178,7 +202,7 @@ namespace VRArmory
 
         public void SetSafety(bool on)
         {
-            if (on == safetyOn) return;
+            if (on == safetyOn || !hasSafety) return;
             safetyOn = on;
             Play(leverClip, 0.6f);
             if (on && hammerCocked)
@@ -219,7 +243,7 @@ namespace VRArmory
 
             if (needsReset || slideLocked) return; // slide open: out of battery, the trigger does nothing
             if (hammerCocked && pull >= 0.4f) DropHammer(false);
-            else if (!hammerCocked && pull >= 1f && slideAmount < 0.05f) DropHammer(true);
+            else if (doubleAction && !hammerCocked && pull >= 1f && slideAmount < 0.05f) DropHammer(true);
         }
 
         public void SetSlide(float amount)
@@ -298,7 +322,8 @@ namespace VRArmory
             Play(fallClip, 1f);
             HammerFell?.Invoke();
             Notify(doubleAction ? "DOUBLE ACTION - HAMMER FELL" : "SINGLE ACTION - HAMMER FELL");
-            if (check == Check.DoubleAction && doubleAction) Advance();
+            // Stage 3 is the first hammer drop: double action on the Beretta, single action on a gun that starts cocked.
+            if (check == Check.DoubleAction && (doubleAction || !this.doubleAction)) Advance();
             else if (check == Check.SingleAction && !doubleAction) Advance();
         }
 
@@ -345,6 +370,7 @@ namespace VRArmory
             Vector3 muzzle = LongestAxis(sb.size);
             Transform rearSight = FindPiece(slideT, "Rear_Sight");
             if (rearSight != null && Vector3.Dot(f.InverseTransformPoint(rearSight.position) - sb.center, muzzle) > 0f) muzzle = -muzzle;
+            if (muzzleOverride.sqrMagnitude > 0f) muzzle = Cardinal(muzzleOverride);
             Vector3 upRaw = sb.center - fb.center;
             upRaw -= Vector3.Dot(upRaw, muzzle) * muzzle;
             Vector3 up = Cardinal(upRaw);
@@ -355,12 +381,12 @@ namespace VRArmory
 
             slideBackLocal = slideRestLocal - muzzle * (slideTravel / f.lossyScale.x);
 
-            hammer = MakePiece(f, FindPiece(f, "Hammer"), muzzle, up, lateral, -1f, true);
-            trigger = MakePiece(f, FindPiece(f, "Trigger_Shoe"), muzzle, up, lateral, 1f, false);
+            hammer = string.IsNullOrEmpty(hammerPieceName) ? null : MakePiece(f, FindPiece(f, hammerPieceName), muzzle, up, lateral, -1f, true);
+            trigger = MakePiece(f, FindPiece(f, triggerPieceName), muzzle, up, lateral, 1f, false);
 
             // The slide carries both Ambi_Safety_Lever and Safety_Axle; a plain "Safety" search picked the axle.
-            Transform leverT = FindPiece(slideT, "Ambi_Safety_Lever");
-            if (leverT == null) leverT = FindPiece(slideT, "Safety");
+            Transform leverT = hasSafety ? FindPiece(slideT, "Ambi_Safety_Lever") : null;
+            if (leverT == null && hasSafety) leverT = FindPiece(slideT, "Safety");
             lever = MakePiece(f, leverT, muzzle, up, lateral, 0f, false);
             Transform axle = FindPiece(slideT, "Safety_Axle");
             if (lever != null && axle != null)

@@ -15,7 +15,9 @@ namespace VRArmory
     // It also adds VRPlacementAssist to every grabbable part and makes the socket ghosts easier to see.
     public class VRGuidance : MonoBehaviour
     {
-        public enum Phase { Idle, PickUp, Place, PickUpPistol, FunctionCheck, Done }
+        // PickUpHost: the part goes into another part that lies loose on the bench - that one is picked up first (or with
+        // the other hand), so the two are joined in the hands instead of the part being dropped onto the bench.
+        public enum Phase { Idle, PickUp, Place, PickUpPistol, FunctionCheck, Done, PickUpHost }
 
         public enum Correction
         {
@@ -44,6 +46,10 @@ namespace VRArmory
         public AssemblyPart HighlightedPart { get; private set; }
         public AssemblyPart WrongPartHeld { get; private set; }
         public AssemblyPart HostHeld { get; private set; }
+        // The current step's receiving part (null when the part goes into nothing loose), and whether other parts are
+        // already seated in it (the panel then calls a frame "the pistol").
+        public AssemblyPart StepHost { get; private set; }
+        public bool StepHostAssembled { get; private set; }
         public SnapSocket TargetSocket { get; private set; }
         public Correction CurrentCorrection { get; private set; }
         public string TooltipText { get; private set; }
@@ -130,6 +136,8 @@ namespace VRArmory
         {
             WrongPartHeld = null;
             HostHeld = null;
+            StepHost = null;
+            StepHostAssembled = false;
             TargetSocket = null;
             CurrentCorrection = Correction.None;
             TooltipText = null;
@@ -152,9 +160,26 @@ namespace VRArmory
                     else WrongPartHeld = p;
                 }
 
+                AssemblyPart host = socket.Host;
+                bool joinInHands = host != null && host != part && !host.IsSeated;
+                if (joinInHands)
+                {
+                    StepHost = host;
+                    StepHostAssembled = host.GetComponentsInChildren<AssemblyPart>().Length > 1;
+                }
+
                 if (socket.IsFilled)
                 {
                     CurrentPhase = Phase.Place; // seat animation running: nothing to point at
+                }
+                else if (joinInHands && HostHeld == null)
+                {
+                    // Receiving part first (or now, with the other hand): no target on the bench to drop the part onto.
+                    CurrentPhase = Phase.PickUpHost;
+                    wantHighlight = host;
+                    showMarker = host.IsGrabbable;
+                    markerPos = TopOf(host);
+                    markerText = VRTrainingText.HostName(host.partType, StepHostAssembled).ToUpperInvariant();
                 }
                 else if (!part.IsHeld)
                 {
@@ -171,7 +196,7 @@ namespace VRArmory
                     Transform view = viewCamera.transform;
                     CurrentCorrection = socket.CurrentAlignment == SnapSocket.Alignment.Valid
                         ? Correction.Aligned
-                        : ComputeCorrection(part.transform.position, part.transform.rotation, socket.transform.position, socket.transform.rotation,
+                        : ComputeCorrection(part.transform.position, part.transform.rotation, socket.transform.position, socket.SeatRotationFor(part.transform.rotation),
                                             view, socket.snapDistance, socket.snapAngle, assistRadius);
 
                     Vector3 from = CentreOf(part);

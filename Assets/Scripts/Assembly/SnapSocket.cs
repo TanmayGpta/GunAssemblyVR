@@ -18,6 +18,23 @@ namespace VRArmory
         public float snapAngle = 20f;
         public float hintRange = 0.35f;
         public float snapDuration = 0.25f;
+        [Tooltip("Socket-local axis the part is round about (a pin): turned about it, or end over end, it still fits. " +
+                 "Zero = the part must match the seat's rotation exactly.")]
+        public Vector3 symmetryAxis;
+
+        // The fitting seat rotation nearest to 'partRotation': the seat itself, or for a round part, the part's own pose
+        // with its axis swung onto the seat's axis (either way round).
+        public Quaternion SeatRotationFor(Quaternion partRotation)
+        {
+            if (symmetryAxis.sqrMagnitude < 1e-6f) return transform.rotation;
+            Vector3 axis = symmetryAxis.normalized;
+            Vector3 seatAxis = transform.rotation * axis;
+            Vector3 partAxis = partRotation * axis;
+            if (Vector3.Dot(seatAxis, partAxis) < 0f) seatAxis = -seatAxis;
+            return Quaternion.FromToRotation(partAxis, seatAxis) * partRotation;
+        }
+
+        public float AngleTo(Quaternion partRotation) => Quaternion.Angle(partRotation, SeatRotationFor(partRotation));
 
         [Header("Ghost Preview")]
         public Material ghostTemplate;
@@ -195,7 +212,7 @@ namespace VRArmory
             }
 
             LastDistance = Vector3.Distance(held.transform.position, transform.position);
-            LastAngle = Quaternion.Angle(held.transform.rotation, transform.rotation);
+            LastAngle = AngleTo(held.transform.rotation);
 
             if (held != acceptedPart)
             {
@@ -237,7 +254,7 @@ namespace VRArmory
             if (IsFilled || transform.IsChildOf(part.transform)) return;
 
             float dist = Vector3.Distance(part.transform.position, transform.position);
-            float angle = Quaternion.Angle(part.transform.rotation, transform.rotation);
+            float angle = AngleTo(part.transform.rotation);
 
             if (part == acceptedPart && IsUnlocked && dist <= snapDistance && angle <= snapAngle)
             {

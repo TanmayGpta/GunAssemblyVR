@@ -72,7 +72,19 @@ namespace VRArmory
         public static string PickUp(GunPart part) => $"Pick up the glowing {PartName(part)}";
         public const string PickUpFirstDetail = "Reach out and squeeze the GRIP button on your controller.";
         public const string PickUpDetail = "Squeeze GRIP to pick it up.";
-        public static string HostHeldDetail(GunPart host) => $"Good - keep holding the {PartName(host)}. Use your other hand.";
+        public static string HostHeldDetail(GunPart host) => HostHeldDetail(PartName(host));
+        public static string HostHeldDetail(string host) => $"Good - keep holding the {host} in this hand.";
+
+        // Parts are joined in the hands: the receiving part in one hand, the new part in the other.
+        // A frame with parts already in it is "the pistol".
+        public static string HostName(GunPart host, bool assembled) => host == GunPart.LowerFrame && assembled ? "pistol" : PartName(host);
+        public static string PickUpHost(string host) => $"Pick up the {host} with one hand";
+        public static string PickUpHostDetail(GunPart part, bool first) => first
+            ? $"Squeeze GRIP to hold it. Then take the {PartName(part)} in your other hand."
+            : $"Then take the {PartName(part)} in your other hand and join them.";
+        public static string PickUpHostOtherHand(string host) => $"Now pick up the {host} with your other hand";
+        public static string PickUpHostOtherHandDetail(GunPart part) => $"Keep holding the {PartName(part)}. Join the two parts in your hands, not on the table.";
+        public static string PickUpOtherHand(GunPart part) => $"Now pick up the {PartName(part)} with your other hand";
 
         public static string Place(GunPart part)
         {
@@ -107,7 +119,7 @@ namespace VRArmory
         public const string Tec9Id = "tec9";
         public const string Tec9Name = "TEC-9";
         public const string Tec9HudSubtitle = "INTRATEC TEC-9 9MM  |  FIELD REASSEMBLY SEQUENCE";
-        public const string PlaceDetail = "Move it to the glowing outline. It clicks in when it lines up.";
+        public const string PlaceDetail = "Bring your hands together and line it up with the glowing outline. It clicks in.";
 
         public static string WrongPart(GunPart held) => $"That's the {PartName(held)} - it comes later";
         public static string WrongPartDetail(GunPart wanted) => $"Put it down and pick up the glowing {PartName(wanted)}.";
@@ -127,7 +139,7 @@ namespace VRArmory
         public const string TiltUp = "Tilt the front up";
         public const string TiltDown = "Tilt the front down";
         public const string Aligned = "Perfect - hold it there";
-        public const string TargetLabel = "PUT IT HERE";
+        public const string TargetLabel = "JOIN HERE";
 
         public static string Seated(GunPart part) => $"{Capital(PartName(part))} in place!";
 
@@ -169,6 +181,22 @@ namespace VRArmory
         };
         public static string StageTitle(int stage) => StageTitles[stage];
         public static string StageDetail(int stage, string safetyButton) => string.Format(StageDetails[stage], safetyButton);
+
+        // TEC-9: no safety, single action, a bolt with a charging knob on the side. Its check is stages 3..6.
+        public static string StageTitle(int stage, string weaponId) =>
+            weaponId == Tec9Id && stage == 3 ? "Pull the trigger all the way" : StageTitle(stage);
+        public static string StageDetail(int stage, string safetyButton, string weaponId)
+        {
+            if (weaponId == Tec9Id)
+            {
+                switch (stage)
+                {
+                    case 3: return "The gun is cocked, so the hammer drops.";
+                    case 4: return "With your other hand, grab the charging knob on the side, pull it back, then let go.";
+                }
+            }
+            return StageDetail(stage, safetyButton);
+        }
         public const string ReleaseTrigger = "Now let go of the trigger";
         public const string ReleaseTriggerFirst = "Let go of the trigger first";
         public const string HoldTriggerWhileRacking = "Keep the trigger pulled while you rack";
@@ -283,14 +311,14 @@ namespace VRArmory
                 case VoiceLine.Common_WellDone: return "Well done.";
                 case VoiceLine.Common_Good: return "Good.";
 
-                case VoiceLine.Asm_Pick_Barrel: return "First, pick up the glowing barrel. Reach out, and squeeze the grip button on the side of your controller.";
-                case VoiceLine.Asm_Place_Barrel: return "Now put the barrel into the slide. Move it to the glowing outline, and it will click into place.";
-                case VoiceLine.Asm_Pick_Spring: return "Next, pick up the recoil spring.";
-                case VoiceLine.Asm_Place_Spring: return "Slide the spring in, just under the barrel.";
-                case VoiceLine.Asm_Pick_Slide: return "Next, pick up the slide.";
-                case VoiceLine.Asm_Place_Slide: return "Now put the slide onto the frame. You can use both hands to turn it.";
-                case VoiceLine.Asm_Pick_Magazine: return "Next, pick up the magazine.";
-                case VoiceLine.Asm_Place_Magazine: return "Push the magazine up, into the grip.";
+                case VoiceLine.Asm_Pick_Barrel: return "First, pick up the glowing slide with one hand. Squeeze the grip button on the side of your controller. Then, with your other hand, pick up the barrel.";
+                case VoiceLine.Asm_Place_Barrel: return "Now bring your hands together, and put the barrel into the slide. Line it up with the glowing outline, and it will click into place.";
+                case VoiceLine.Asm_Pick_Spring: return "Next, hold the slide in one hand, and pick up the recoil spring with the other.";
+                case VoiceLine.Asm_Place_Spring: return "Bring them together, and slide the spring in, just under the barrel.";
+                case VoiceLine.Asm_Pick_Slide: return "Next, pick up the frame with one hand, and the slide with the other.";
+                case VoiceLine.Asm_Place_Slide: return "Now bring them together, and push the slide onto the frame, until it clicks.";
+                case VoiceLine.Asm_Pick_Magazine: return "Next, hold the pistol by its grip in one hand, and pick up the magazine with the other.";
+                case VoiceLine.Asm_Place_Magazine: return "Push the magazine up, into the grip, until it clicks.";
                 case VoiceLine.Asm_TryAgain: return "Not quite. The part went back to the bench. Pick up the glowing part, and try again.";
                 case VoiceLine.Asm_Complete: return "The pistol is assembled.";
 
@@ -339,6 +367,22 @@ namespace VRArmory
                 case VoiceLine.Rng_Declined: return "Come back when you're ready, soldier.";
                 case VoiceLine.Rng_Reload_B: return "Magazine empty! Press B to drop it. Then pick up a fresh, fully loaded magazine from the counter.";
                 case VoiceLine.Rng_Reload_Y: return "Magazine empty! Press Y to drop it. Then pick up a fresh, fully loaded magazine from the counter.";
+                case VoiceLine.Intro_ChooseWeapon: return "Choose the weapon you want to put together. Point at its card, and pull the trigger.";
+                case VoiceLine.Tec9_Pick_Bolt: return "First, pick up the glowing upper receiver with one hand. Then, with your other hand, pick up the bolt.";
+                case VoiceLine.Tec9_Place_Bolt: return "Now bring your hands together, and slide the bolt into the back of the receiver, until it clicks.";
+                case VoiceLine.Tec9_Pick_Spring: return "Next, hold the receiver in one hand, and pick up the recoil spring unit with the other.";
+                case VoiceLine.Tec9_Place_Spring: return "Push the spring unit into the back of the receiver, behind the bolt.";
+                case VoiceLine.Tec9_Pick_Upper: return "Next, pick up the frame with one hand, and the upper receiver with the other.";
+                case VoiceLine.Tec9_Place_Upper: return "Now set the upper receiver down onto the frame, until it clicks.";
+                case VoiceLine.Tec9_Pick_Pin: return "Next, hold the pistol in one hand, and pick up the small takedown pin with the other.";
+                case VoiceLine.Tec9_Place_Pin: return "Push the pin through the front of the frame. It locks the two halves together.";
+                case VoiceLine.Tec9_Pick_Magazine: return "Next, hold the pistol by its grip in one hand, and pick up the magazine with the other.";
+                case VoiceLine.Tec9_Place_Magazine: return "Push the magazine up, into the magazine well, in front of the trigger guard, until it clicks.";
+                case VoiceLine.Tec9_FC_TriggerDemo_First: return "This pistol has no safety, and it is already cocked. Watch the trigger. It moves all the way back, and the hammer drops.";
+                case VoiceLine.Tec9_FC_BoltDemo: return "Now watch the glowing bolt. It moves all the way back, then springs forward.";
+                case VoiceLine.Tec9_FC_YourTurn_Rack: return "With your other hand, grab the charging knob on the side. Pull it back, then let go.";
+                case VoiceLine.Tec9_FC_HoldWhileRacking: return "Keep the trigger pulled while you pull the charging knob. Let's try that again.";
+                case VoiceLine.Tec9_FC_ReleasedTooEarly: return "You let go of the trigger too early. Pull it, hold it, and pull the charging knob again.";
                 default: return "";
             }
         }

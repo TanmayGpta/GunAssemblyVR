@@ -22,6 +22,7 @@ namespace VRArmory
         {
             None, ChooseModule, Briefing, PickUpPart, PlacePart, PickUpPistol, PickUpPistolAgain,
             SafetyOn, SafeTrigger, SafeLetGo, SafetyOff, DoubleAction, Rack, Reset, SingleAction, Passed, Complete,
+            ChooseWeapon,
         }
 
         public GunAssemblyManager manager;
@@ -145,6 +146,7 @@ namespace VRArmory
             if (!manager.HasStarted || !menu.progressPanel.activeSelf)
             {
                 if (menu.introPanel.activeSelf) return Cue.Briefing;
+                if (menu.weaponPanel != null && menu.weaponPanel.activeSelf) return Cue.ChooseWeapon;
                 return menu.modulesPanel.activeSelf ? Cue.ChooseModule : Cue.None;
             }
 
@@ -235,12 +237,18 @@ namespace VRArmory
                     voice.Play(PistolInLeftHand() ? VoiceLine.FC_SafetyOff_X : VoiceLine.FC_SafetyOff_A);
                     break;
                 case Cue.DoubleAction:
-                    // The trigger was shown two steps ago: once is enough here.
-                    Demonstrate(VRGhostDemo.Demo.TriggerPull, 1, VoiceLine.FC_TriggerDemo_Fire, VoiceLine.FC_YourTurn_Trigger);
+                    // Beretta: the trigger was shown two steps ago, once is enough. TEC-9: the check starts here.
+                    if (Tec9OnBench) Demonstrate(VRGhostDemo.Demo.TriggerPull, cycles, VoiceLine.Tec9_FC_TriggerDemo_First, VoiceLine.FC_YourTurn_Trigger);
+                    else Demonstrate(VRGhostDemo.Demo.TriggerPull, 1, VoiceLine.FC_TriggerDemo_Fire, VoiceLine.FC_YourTurn_Trigger);
                     break;
                 case Cue.Rack:
-                    Demonstrate(VRGhostDemo.Demo.SlideRack, cycles, VoiceLine.FC_SlideDemo, VoiceLine.FC_YourTurn_Rack,
+                    Demonstrate(VRGhostDemo.Demo.SlideRack, cycles,
+                                Tec9OnBench ? VoiceLine.Tec9_FC_BoltDemo : VoiceLine.FC_SlideDemo,
+                                Tec9OnBench ? VoiceLine.Tec9_FC_YourTurn_Rack : VoiceLine.FC_YourTurn_Rack,
                                 fresh ? VoiceLine.FC_HammerDropped : VoiceLine.None, VoiceLine.FC_KeepHolding);
+                    break;
+                case Cue.ChooseWeapon:
+                    voice.Play(VoiceLine.Intro_ChooseWeapon);
                     break;
                 case Cue.Reset:
                     Demonstrate(VRGhostDemo.Demo.TriggerRelease, 1, VoiceLine.FC_ReleaseDemo, VoiceLine.FC_YourTurn_Release,
@@ -259,13 +267,26 @@ namespace VRArmory
             }
         }
 
-        // The recorded assembly lines describe the Beretta; another weapon's steps stay silent until it has its own.
-        private static bool BerettaOnBench =>
-            WeaponKitSwitch.Instance == null || WeaponKitSwitch.Instance.Active == null || WeaponKitSwitch.Instance.Active.id == "beretta92";
+        // Weapon on the bench: the TEC-9 has its own assembly and function-check lines.
+        private static bool Tec9OnBench =>
+            WeaponKitSwitch.Instance != null && WeaponKitSwitch.Instance.Active != null && WeaponKitSwitch.Instance.Active.id == VRTrainingText.Tec9Id;
+
+        private static VoiceLine Tec9Line(GunPart part, bool place)
+        {
+            switch (part)
+            {
+                case GunPart.Bolt: return place ? VoiceLine.Tec9_Place_Bolt : VoiceLine.Tec9_Pick_Bolt;
+                case GunPart.RecoilSpring: return place ? VoiceLine.Tec9_Place_Spring : VoiceLine.Tec9_Pick_Spring;
+                case GunPart.UpperReceiver: return place ? VoiceLine.Tec9_Place_Upper : VoiceLine.Tec9_Pick_Upper;
+                case GunPart.TakedownPin: return place ? VoiceLine.Tec9_Place_Pin : VoiceLine.Tec9_Pick_Pin;
+                case GunPart.Magazine: return place ? VoiceLine.Tec9_Place_Magazine : VoiceLine.Tec9_Pick_Magazine;
+                default: return VoiceLine.None;
+            }
+        }
 
         private static VoiceLine PickLine(GunPart part)
         {
-            if (!BerettaOnBench) return VoiceLine.None;
+            if (Tec9OnBench) return Tec9Line(part, false);
             switch (part)
             {
                 case GunPart.Barrel: return VoiceLine.Asm_Pick_Barrel;
@@ -278,7 +299,7 @@ namespace VRArmory
 
         private static VoiceLine PlaceLine(GunPart part)
         {
-            if (!BerettaOnBench) return VoiceLine.None;
+            if (Tec9OnBench) return Tec9Line(part, true);
             switch (part)
             {
                 case GunPart.Barrel: return VoiceLine.Asm_Place_Barrel;
@@ -403,8 +424,9 @@ namespace VRArmory
         private void OnCheckEvent(string message)
         {
             if (functionCheck.Passed) return;
-            VoiceLine line = message.StartsWith("HOLD THE TRIGGER BACK") ? VoiceLine.FC_HoldWhileRacking
-                           : message.StartsWith("TRIGGER RELEASED TOO EARLY") ? VoiceLine.FC_ReleasedTooEarly
+            bool tec9 = Tec9OnBench;
+            VoiceLine line = message.StartsWith("HOLD THE TRIGGER BACK") ? (tec9 ? VoiceLine.Tec9_FC_HoldWhileRacking : VoiceLine.FC_HoldWhileRacking)
+                           : message.StartsWith("TRIGGER RELEASED TOO EARLY") ? (tec9 ? VoiceLine.Tec9_FC_ReleasedTooEarly : VoiceLine.FC_ReleasedTooEarly)
                            : VoiceLine.None;
             if (line == VoiceLine.None) return;
             CancelDemo();

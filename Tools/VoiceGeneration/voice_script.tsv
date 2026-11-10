@@ -3,14 +3,14 @@ VO_Intro_ChooseModule.wav	Intro_ChooseModule	Welcome. To begin, point your contr
 VO_Intro_Briefing.wav	Intro_Briefing	In this training, you will put a pistol together, and then check that it works. When you are ready, point at Start training, and pull the trigger.
 VO_Common_WellDone.wav	Common_WellDone	Well done.
 VO_Common_Good.wav	Common_Good	Good.
-VO_Asm_Pick_Barrel.wav	Asm_Pick_Barrel	First, pick up the glowing barrel. Reach out, and squeeze the grip button on the side of your controller.
-VO_Asm_Place_Barrel.wav	Asm_Place_Barrel	Now put the barrel into the slide. Move it to the glowing outline, and it will click into place.
-VO_Asm_Pick_Spring.wav	Asm_Pick_Spring	Next, pick up the recoil spring.
-VO_Asm_Place_Spring.wav	Asm_Place_Spring	Slide the spring in, just under the barrel.
-VO_Asm_Pick_Slide.wav	Asm_Pick_Slide	Next, pick up the slide.
-VO_Asm_Place_Slide.wav	Asm_Place_Slide	Now put the slide onto the frame. You can use both hands to turn it.
-VO_Asm_Pick_Magazine.wav	Asm_Pick_Magazine	Next, pick up the magazine.
-VO_Asm_Place_Magazine.wav	Asm_Place_Magazine	Push the magazine up, into the grip.
+VO_Asm_Pick_Barrel.wav	Asm_Pick_Barrel	First, pick up the glowing slide with one hand. Squeeze the grip button on the side of your controller. Then, with your other hand, pick up the barrel.
+VO_Asm_Place_Barrel.wav	Asm_Place_Barrel	Now bring your hands together, and put the barrel into the slide. Line it up with the glowing outline, and it will click into place.
+VO_Asm_Pick_Spring.wav	Asm_Pick_Spring	Next, hold the slide in one hand, and pick up the recoil spring with the other.
+VO_Asm_Place_Spring.wav	Asm_Place_Spring	Bring them together, and slide the spring in, just under the barrel.
+VO_Asm_Pick_Slide.wav	Asm_Pick_Slide	Next, pick up the frame with one hand, and the slide with the other.
+VO_Asm_Place_Slide.wav	Asm_Place_Slide	Now bring them together, and push the slide onto the frame, until it clicks.
+VO_Asm_Pick_Magazine.wav	Asm_Pick_Magazine	Next, hold the pistol by its grip in one hand, and pick up the magazine with the other.
+VO_Asm_Place_Magazine.wav	Asm_Place_Magazine	Push the magazine up, into the grip, until it clicks.
 VO_Asm_TryAgain.wav	Asm_TryAgain	Not quite. The part went back to the bench. Pick up the glowing part, and try again.
 VO_Asm_Complete.wav	Asm_Complete	The pistol is assembled.
 VO_FC_Intro.wav	FC_Intro	Now, let's check that it works. Pick up the pistol by its grip.
@@ -57,3 +57,19 @@ VO_Rng_CeaseFire.wav	Rng_CeaseFire	Cease fire! Magazine empty. Let's see how you
 VO_Rng_Declined.wav	Rng_Declined	Come back when you're ready, soldier.
 VO_Rng_Reload_B.wav	Rng_Reload_B	Magazine empty! Press B to drop it. Then pick up a fresh, fully loaded magazine from the counter.
 VO_Rng_Reload_Y.wav	Rng_Reload_Y	Magazine empty! Press Y to drop it. Then pick up a fresh, fully loaded magazine from the counter.
+VO_Intro_ChooseWeapon.wav	Intro_ChooseWeapon	Choose the weapon you want to put together. Point at its card, and pull the trigger.
+VO_Tec9_Pick_Bolt.wav	Tec9_Pick_Bolt	First, pick up the glowing upper receiver with one hand. Then, with your other hand, pick up the bolt.
+VO_Tec9_Place_Bolt.wav	Tec9_Place_Bolt	Now bring your hands together, and slide the bolt into the back of the receiver, until it clicks.
+VO_Tec9_Pick_Spring.wav	Tec9_Pick_Spring	Next, hold the receiver in one hand, and pick up the recoil spring unit with the other.
+VO_Tec9_Place_Spring.wav	Tec9_Place_Spring	Push the spring unit into the back of the receiver, behind the bolt.
+VO_Tec9_Pick_Upper.wav	Tec9_Pick_Upper	Next, pick up the frame with one hand, and the upper receiver with the other.
+VO_Tec9_Place_Upper.wav	Tec9_Place_Upper	Now set the upper receiver down onto the frame, until it clicks.
+VO_Tec9_Pick_Pin.wav	Tec9_Pick_Pin	Next, hold the pistol in one hand, and pick up the small takedown pin with the other.
+VO_Tec9_Place_Pin.wav	Tec9_Place_Pin	Push the pin through the front of the frame. It locks the two halves together.
+VO_Tec9_Pick_Magazine.wav	Tec9_Pick_Magazine	Next, hold the pistol by its grip in one hand, and pick up the magazine with the other.
+VO_Tec9_Place_Magazine.wav	Tec9_Place_Magazine	Push the magazine up, into the magazine well, in front of the trigger guard, until it clicks.
+VO_Tec9_FC_TriggerDemo_First.wav	Tec9_FC_TriggerDemo_First	This pistol has no safety, and it is already cocked. Watch the trigger. It moves all the way back, and the hammer drops.
+VO_Tec9_FC_BoltDemo.wav	Tec9_FC_BoltDemo	Now watch the glowing bolt. It moves all the way back, then springs forward.
+VO_Tec9_FC_YourTurn_Rack.wav	Tec9_FC_YourTurn_Rack	With your other hand, grab the charging knob on the side. Pull it back, then let go.
+VO_Tec9_FC_HoldWhileRacking.wav	Tec9_FC_HoldWhileRacking	Keep the trigger pulled while you pull the charging knob. Let's try that again.
+VO_Tec9_FC_ReleasedTooEarly.wav	Tec9_FC_ReleasedTooEarly	You let go of the trigger too early. Pull it, hold it, and pull the charging knob again.

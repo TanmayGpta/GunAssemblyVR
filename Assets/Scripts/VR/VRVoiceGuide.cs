@@ -31,6 +31,11 @@ namespace VRArmory
         Rng_Offer, Rng_NotReady, Rng_Handover, Rng_Magazine, Rng_Load, Rng_FireWhenReady, Rng_CeaseFire, Rng_Declined,
         // Unlimited mode, first empty magazine: _B / _Y names the release button of the hand holding the pistol.
         Rng_Reload_B, Rng_Reload_Y,
+        // Weapon cards, and the TEC-9's own assembly steps and function check.
+        Intro_ChooseWeapon,
+        Tec9_Pick_Bolt, Tec9_Place_Bolt, Tec9_Pick_Spring, Tec9_Place_Spring, Tec9_Pick_Upper, Tec9_Place_Upper,
+        Tec9_Pick_Pin, Tec9_Place_Pin, Tec9_Pick_Magazine, Tec9_Place_Magazine,
+        Tec9_FC_TriggerDemo_First, Tec9_FC_BoltDemo, Tec9_FC_YourTurn_Rack, Tec9_FC_HoldWhileRacking, Tec9_FC_ReleasedTooEarly,
     }
 
     [Serializable]

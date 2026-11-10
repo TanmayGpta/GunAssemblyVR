@@ -457,6 +457,20 @@ namespace VRArmory
             if (step.socket != null)
             {
                 GunPart part = step.socket.acceptedPart.partType;
+                string host = guidance.StepHost != null ? VRTrainingText.HostName(guidance.StepHost.partType, guidance.StepHostAssembled) : null;
+                if (guidance.CurrentPhase == VRGuidance.Phase.PickUpHost)
+                {
+                    // Join in the hands: the receiving part in one hand, the new part in the other.
+                    bool partInHand = step.socket.acceptedPart.IsHeld;
+                    title = partInHand ? VRTrainingText.PickUpHostOtherHand(host) : VRTrainingText.PickUpHost(host);
+                    detail = partInHand ? VRTrainingText.PickUpHostOtherHandDetail(part) : VRTrainingText.PickUpHostDetail(part, index == 0);
+                    if (guidance.WrongPartHeld != null)
+                    {
+                        feedback = VRTrainingText.WrongPart(guidance.WrongPartHeld.partType);
+                        kind = Feedback.Error;
+                    }
+                    return;
+                }
                 if (guidance.CurrentPhase == VRGuidance.Phase.Place)
                 {
                     WeaponKitSwitch kits = WeaponKitSwitch.Instance;
@@ -467,8 +481,8 @@ namespace VRArmory
                          : guidance.CurrentCorrection == VRGuidance.Correction.BringToTarget ? Feedback.Info : Feedback.Guide;
                     return;
                 }
-                title = VRTrainingText.PickUp(part);
-                detail = guidance.HostHeld != null ? VRTrainingText.HostHeldDetail(guidance.HostHeld.partType)
+                title = guidance.HostHeld != null ? VRTrainingText.PickUpOtherHand(part) : VRTrainingText.PickUp(part);
+                detail = guidance.HostHeld != null ? VRTrainingText.HostHeldDetail(host ?? VRTrainingText.PartName(guidance.HostHeld.partType))
                        : index == 0 ? VRTrainingText.PickUpFirstDetail : VRTrainingText.PickUpDetail;
                 if (guidance.WrongPartHeld != null)
                 {
@@ -493,8 +507,9 @@ namespace VRArmory
                 return;
             }
             int stage = Mathf.Clamp(functionCheck.Stage, 0, FunctionCheck.StageCount - 1);
-            title = VRTrainingText.StageTitle(stage);
-            detail = VRTrainingText.StageDetail(stage, guidance.SafetyButton);
+            string weapon = WeaponKitSwitch.Instance != null && WeaponKitSwitch.Instance.Active != null ? WeaponKitSwitch.Instance.Active.id : null;
+            title = VRTrainingText.StageTitle(stage, weapon);
+            detail = VRTrainingText.StageDetail(stage, guidance.SafetyButton, weapon);
             if (stage == 1 && functionCheck.SafeTriggerPulled) title = VRTrainingText.ReleaseTrigger;
             if (stage == 2 && functionCheck.TriggerPull >= 0.2f) title = VRTrainingText.ReleaseTriggerFirst;
             if (stage == 4 && functionCheck.TriggerPull < 0.8f)
@@ -502,7 +517,7 @@ namespace VRArmory
                 feedback = VRTrainingText.HoldTriggerWhileRacking;
                 kind = Feedback.Guide;
             }
-            feedback = feedback ?? $"CHECK {stage + 1} OF {FunctionCheck.StageCount}";
+            feedback = feedback ?? $"CHECK {stage - functionCheck.FirstStage + 1} OF {functionCheck.StagesInCheck}";
             if (kind == Feedback.None) kind = Feedback.Info;
         }
 

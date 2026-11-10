@@ -174,7 +174,9 @@ namespace VRArmory
                 Vector3 down = functionCheck.frame != null ? -functionCheck.frame.transform.TransformDirection(functionCheck.UpLocal).normalized : Vector3.down;
                 SpentMagazine.Spawn(magazine.transform, down * 0.6f, spentLifetime, functionCheck.frame != null ? functionCheck.frame.transform : null);
                 magazine.SnapHome();
+                // Free practice: a fresh, full one waits on the bench. Timed: that was the only magazine, it is gone.
                 if (refillOnInsert) RoundsInMagazine = capacity;
+                else magazine.gameObject.SetActive(false);
             }
             else magazine.ReturnHome();
             Changed?.Invoke();

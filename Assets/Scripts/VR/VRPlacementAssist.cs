@@ -62,7 +62,7 @@ namespace VRArmory
             if (!HasActiveSocket()) return;
 
             Vector3 seatPos = Socket.transform.position;
-            Quaternion seatRot = Socket.transform.rotation;
+            Quaternion seatRot = Socket.SeatRotationFor(targetPose.rotation);
             float d = Vector3.Distance(targetPose.position, seatPos);
             if (d >= assistRadius) return;
 

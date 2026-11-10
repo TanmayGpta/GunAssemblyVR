@@ -218,7 +218,8 @@ namespace VRArmory
             Transform frame = frameGrab.transform;
             Bounds slide = WorldBounds(functionCheck.slide.transform);
             Vector3 rear = functionCheck.SlideRearDirection;
-            Vector3 centre = slide.center + rear * (Vector3.Dot(slide.extents, Abs(rear)) * 0.55f);
+            Vector3 centre = functionCheck.rackHandle != null ? functionCheck.rackHandle.position // e.g. a charging knob
+                           : slide.center + rear * (Vector3.Dot(slide.extents, Abs(rear)) * 0.55f);
 
             GameObject go = new GameObject("VR_Slide_Rack_Grip");
             go.SetActive(false); // configure before Awake runs

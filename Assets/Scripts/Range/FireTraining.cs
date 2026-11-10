@@ -373,6 +373,7 @@ namespace VRArmory
         private void LayOutWeapon()
         {
             ammo.refillOnInsert = false;
+            if (ammo.magazine != null) ammo.magazine.gameObject.SetActive(true); // hidden if the last round dropped it
             ammo.PrepareMagazine(ammo.capacity);
             bool held = frame.IsHeld || frame.IsInOffHand || (frameGrab != null && frameGrab.isSelected);
             PlaceOnCounter(frame, pistolSpot, !held);
