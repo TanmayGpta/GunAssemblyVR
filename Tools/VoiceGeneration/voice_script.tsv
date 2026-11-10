@@ -55,3 +55,5 @@ VO_Rng_Load.wav	Rng_Load	Pick up the pistol. Push the magazine up into the grip,
 VO_Rng_FireWhenReady.wav	Rng_FireWhenReady	Safety off. The clock starts with your first shot. Farther targets, and the centre rings, score more. Fire when ready.
 VO_Rng_CeaseFire.wav	Rng_CeaseFire	Cease fire! Magazine empty. Let's see how you did.
 VO_Rng_Declined.wav	Rng_Declined	Come back when you're ready, soldier.
+VO_Rng_Reload_B.wav	Rng_Reload_B	Magazine empty! Press B to drop it. Then pick up a fresh, fully loaded magazine from the counter.
+VO_Rng_Reload_Y.wav	Rng_Reload_Y	Magazine empty! Press Y to drop it. Then pick up a fresh, fully loaded magazine from the counter.

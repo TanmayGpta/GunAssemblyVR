@@ -20,6 +20,14 @@ namespace VRArmory
             centerX = transform.position.x;
         }
 
+        // Back to its lane centre (stationary targets: the three lanes keep every dummy in clear view of the booth).
+        public void ResetToLane()
+        {
+            Vector3 p = transform.position;
+            p.x = centerX;
+            transform.position = p;
+        }
+
         void Update()
         {
             Vector3 p = transform.position;

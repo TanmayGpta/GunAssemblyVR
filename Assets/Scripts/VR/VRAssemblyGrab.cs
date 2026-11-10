@@ -24,6 +24,11 @@ namespace VRArmory
         [Tooltip("Optional: snaps the ray's end to one point (the grip) while it is anywhere over this part. Enabled only while this grab is (VR only).")]
         public XRInteractableSnapVolume snapVolume;
 
+        [Header("Hold angle")]
+        [Tooltip("Small parts keep the angle they lie at. On: a right-hand grab mirrors that angle (left/right), so the part " +
+                 "leans the right hand's way (the magazine, pushed up into the grip with either hand).")]
+        public bool mirrorForRightHand;
+
         public AssemblyPart Part { get; private set; }
 
         // Recoil kick of the held pistol (set by PistolFiring each frame): turn kickAngle degrees about kickAxisLocal and
@@ -100,6 +105,54 @@ namespace VRArmory
         {
             base.OnHoverExited(args);
             if (interactorsHovering.Count == 0) Part.SetHighlight(false);
+        }
+
+        // Before XRI fixes the hold (dynamic attach keeps the part's current rotation): mirror it for the right hand.
+        protected override void OnSelectEntering(SelectEnterEventArgs args)
+        {
+            if (mirrorForRightHand && interactorsSelecting.Count == 0 && VRHands.Instance != null
+                && !VRHands.Instance.IsLeft(args.interactorObject))
+                transform.rotation = MirroredRotation(transform.rotation);
+            base.OnSelectEntering(args);
+        }
+
+        // The same pose reflected across the trainee's vertical centre plane (normal = camera right). The reflected frame
+        // is left-handed, so the part's thinnest axis (its own mirror-symmetry normal, e.g. a magazine's width) is
+        // flipped back: the shape looks exactly mirrored, and the result is a proper rotation.
+        private Quaternion MirroredRotation(Quaternion r)
+        {
+            Camera cam = Camera.main;
+            Vector3 n = cam != null ? Vector3.ProjectOnPlane(cam.transform.right, Vector3.up) : Vector3.right;
+            if (n.sqrMagnitude < 1e-6f) return r;
+            n.Normalize();
+            Vector3[] axes = { r * Vector3.right, r * Vector3.up, r * Vector3.forward };
+            for (int i = 0; i < 3; i++) axes[i] -= 2f * Vector3.Dot(axes[i], n) * n;
+            axes[ThinnestLocalAxis()] = -axes[ThinnestLocalAxis()];
+            return Quaternion.LookRotation(axes[2], axes[1]);
+        }
+
+        private int thinAxis = -1;
+
+        private int ThinnestLocalAxis()
+        {
+            if (thinAxis >= 0) return thinAxis;
+            Vector3 min = Vector3.one * float.MaxValue, max = Vector3.one * float.MinValue;
+            foreach (MeshFilter mf in GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                Bounds b = mf.sharedMesh.bounds;
+                Matrix4x4 m = transform.worldToLocalMatrix * mf.transform.localToWorldMatrix;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 c = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    Vector3 p = m.MultiplyPoint3x4(c);
+                    min = Vector3.Min(min, p);
+                    max = Vector3.Max(max, p);
+                }
+            }
+            Vector3 size = max - min;
+            thinAxis = size.x <= size.y && size.x <= size.z ? 0 : size.y <= size.z ? 1 : 2;
+            return thinAxis;
         }
 
         protected override void OnSelectEntered(SelectEnterEventArgs args)

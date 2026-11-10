@@ -268,6 +268,117 @@ namespace VRArmory.Editor
             t.pistolSpot = pistolSpot;
             t.magazineSpot = magSpot;
             t.resultsSpot = Point(booth, "Results_Spot", ResultsPos, Quaternion.LookRotation(ResultsPos - BoothEye));
+            t.menu = BuildMenu(booth, t);
+        }
+
+        // Weapon / mode / targets screen, straight ahead over the counter (where the results show later), card pages in
+        // the style of the training menu. The weapons' models lie on the counter below their cards.
+        static readonly Vector3 MenuPos = new Vector3(0f, 1.5f, 9.4f);
+        const float MenuW = 800f, MenuH = 460f, MenuContentW = 704f;
+
+        static RangeModeMenu BuildMenu(Transform booth, FireTraining t)
+        {
+            GameObject canvas = IntroSceneSetup.WorldCanvas(booth, "Range_Menu", new Vector2(MenuW, MenuH), true);
+            Quaternion rot = Quaternion.LookRotation(MenuPos - BoothEye);
+            canvas.transform.SetPositionAndRotation(MenuPos, rot);
+            Transform p = canvas.transform;
+            float left = -MenuContentW * 0.5f;
+
+            RangeModeMenu m = booth.gameObject.AddComponent<RangeModeMenu>();
+            m.panel = canvas.AddComponent<CanvasGroup>();
+
+            PistolMagazine ammo = t.ammo;
+            m.weapons = new[]
+            {
+                new RangeWeapon
+                {
+                    displayName = "Beretta 92 FS",
+                    magazineSize = ammo != null ? ammo.capacity : 15,
+                    model = t.frame != null ? t.frame.transform : null,
+                    magazineModel = ammo != null && ammo.magazine != null ? ammo.magazine.transform : null,
+                    magazineSeat = ammo != null && ammo.magazineWell != null ? ammo.magazineWell.transform : null,
+                    functionCheck = t.functionCheck,
+                },
+            };
+
+            // 1. Weapon: one card per weapon, side by side: name, the gun's model under it, magazine size.
+            Transform page = MenuPage(p, "Weapon_Page", VRTrainingText.RangeMenuWeaponTitle);
+            int n = m.weapons.Length;
+            m.weaponCards = new Button[n];
+            m.modelSpots = new Transform[n];
+            for (int i = 0; i < n; i++)
+            {
+                RangeWeapon w = m.weapons[i];
+                float x = (i - (n - 1) * 0.5f) * 356f;
+                m.weaponCards[i] = WeaponCard(page, $"Weapon_{i + 1:00}_Card", new Vector2(x, -25f), $"{i + 1:00}", w.displayName,
+                    VRTrainingText.RangeWeaponMagazinePill(w.magazineSize), out m.modelSpots[i]);
+            }
+            m.modelBox = new Vector2(0.27f, 0.105f);
+            m.weaponPage = page.gameObject;
+
+            // 2. Mode.
+            page = MenuPage(p, "Mode_Page", VRTrainingText.RangeMenuModeTitle);
+            m.unlimitedCard = Card(page, "Unlimited_Card", new Vector2(-178f, -22f), true, "01", VRTrainingText.RangeModeUnlimited,
+                VRTrainingText.RangeModeUnlimitedBody, VRTrainingText.RangeModeUnlimitedPill, out _);
+            m.timedCard = Card(page, "Timed_Card", new Vector2(178f, -22f), true, "02", VRTrainingText.RangeModeTimed,
+                VRTrainingText.RangeTimedCardBody(m.weapons[0].magazineSize), VRTrainingText.RangeModeTimedPill, out _);
+            Transform body = m.timedCard.transform.Find("Body");
+            m.timedBodyText = body != null ? body.GetComponent<Text>() : null;
+            m.modePage = page.gameObject;
+
+            // 3. Targets (timed).
+            page = MenuPage(p, "Targets_Page", VRTrainingText.RangeMenuTargetsTitle);
+            m.stationaryCard = Card(page, "Stationary_Card", new Vector2(-178f, -22f), true, "01", VRTrainingText.RangeTargetsStationary,
+                VRTrainingText.RangeTargetsStationaryBody, VRTrainingText.RangeTargetsPill, out _);
+            m.movingCard = Card(page, "Moving_Card", new Vector2(178f, -22f), true, "02", VRTrainingText.RangeTargetsMoving,
+                VRTrainingText.RangeTargetsMovingBody, VRTrainingText.RangeTargetsPill, out _);
+            m.targetsPage = page.gameObject;
+
+            m.cancelButton = MakeButton(p, "End_Button", VRTrainingText.RangeEnd, new Vector2(left + 110f, -190f), new Vector2(220f, 52f), false);
+            m.backButton = MakeButton(p, "Back_Button", VRTrainingText.RangeMenuBack, new Vector2(left + 220f + 12f + 80f, -190f), new Vector2(160f, 52f), false);
+            m.desktopHint = Label(p, "Desktop_Hint", VRTrainingText.RangeMenuDesktopHint, 14, TextSecondary, new Vector2(-left - 150f, -190f), new Vector2(300f, 40f), TextAnchor.MiddleRight);
+            return m;
+        }
+
+        // Weapon card (the whole card is the button, coloured like the training menu's module cards): name at the top,
+        // the picture area for the gun's model in the middle ('modelSpot'), the magazine size at the bottom.
+        static Button WeaponCard(Transform parent, string name, Vector2 pos, string number, string title, string pill, out Transform modelSpot)
+        {
+            Vector2 size = new Vector2(340f, 250f);
+            Image img = Rounded(parent, name, pos, size, Color.white, 0.4f);
+            img.raycastTarget = true;
+            Button btn = img.gameObject.AddComponent<Button>();
+            ColorBlock c = btn.colors;
+            c.normalColor = CardColor;
+            c.highlightedColor = new Color(0.16f, 0.21f, 0.25f);
+            c.selectedColor = c.normalColor;
+            c.pressedColor = new Color(0.09f, 0.12f, 0.15f);
+            c.fadeDuration = 0.08f;
+            btn.colors = c;
+            btn.targetGraphic = img;
+
+            Rounded(img.transform, "Accent", new Vector2(0f, size.y * 0.5f - 2f), new Vector2(size.x - 40f, 3f), Accent, 2f);
+            Label(img.transform, "Title", title, 28, TextPrimary, new Vector2(0f, 90f), new Vector2(292f, 40f), TextAnchor.MiddleLeft, FontStyle.Bold);
+            Label(img.transform, "Number", number, 22, Accent, new Vector2(0f, 90f), new Vector2(292f, 40f), TextAnchor.MiddleRight, FontStyle.Bold);
+            modelSpot = new GameObject("Model_Spot", typeof(RectTransform)).transform;
+            modelSpot.SetParent(img.transform, false);
+            ((RectTransform)modelSpot).anchoredPosition = new Vector2(0f, 8f);
+            ((RectTransform)modelSpot).sizeDelta = new Vector2(292f, 120f);
+            Image pillBg = Rounded(img.transform, "Status", new Vector2(0f, -96f), new Vector2(292f, 34f), new Color(Accent.r, Accent.g, Accent.b, 0.16f), 0.7f);
+            Label(pillBg.transform, "Text", pill, 16, Accent, Vector2.zero, new Vector2(292f, 34f), TextAnchor.MiddleCenter, FontStyle.Bold);
+            return btn;
+        }
+
+        // A full-size page with the section label and a big left-aligned title, like the training menu's pages.
+        static Transform MenuPage(Transform canvas, string name, string title)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.layer = canvas.gameObject.layer;
+            go.transform.SetParent(canvas, false);
+            ((RectTransform)go.transform).sizeDelta = new Vector2(MenuW, MenuH);
+            Label(go.transform, "Section", VRTrainingText.RangeSection, 18, Accent, new Vector2(0f, 192f), new Vector2(MenuContentW, 34f), TextAnchor.MiddleLeft, FontStyle.Bold);
+            Label(go.transform, "Title", title, 40, TextPrimary, new Vector2(0f, 150f), new Vector2(MenuContentW, 56f), TextAnchor.MiddleLeft, FontStyle.Bold);
+            return go.transform;
         }
 
         static Text Stat(Transform parent, string name, Vector2 pos, float width)

@@ -46,7 +46,7 @@ namespace VRArmory
         private Text readoutText;
         private string shownText;
 
-        private bool Live => functionCheck != null && functionCheck.Passed && functionCheck.HasRig;
+        private bool Live => functionCheck != null && functionCheck.Passed && functionCheck.HasRig && FireTraining.LiveFireAllowed;
 
         void Awake()
         {
@@ -143,7 +143,11 @@ namespace VRArmory
 
         void Update()
         {
-            if (!Live) return;
+            if (!Live)
+            {
+                if (readout != null && readout.gameObject.activeSelf) readout.gameObject.SetActive(false);
+                return;
+            }
             if (MagazineInserted && ReleasePressed()) Release();
             UpdateReadout();
         }

@@ -356,6 +356,7 @@ namespace VRArmory.Editor
                 grab.matchAttachRotation = true;
                 grab.wrapTrackedHand = false;
             }
+            grab.mirrorForRightHand = part.partType == GunPart.Magazine; // leans the holding hand's way, either hand
             grab.trackScale = false;
             grab.retainTransformParent = true;
             grab.addDefaultGrabTransformers = false;
@@ -549,7 +550,7 @@ namespace VRArmory.Editor
         }
 
         // A module card: the whole card is the button.
-        static Button Card(Transform parent, string name, Vector2 pos, bool available, string number, string title, string body, string status, out Text statusText)
+        internal static Button Card(Transform parent, string name, Vector2 pos, bool available, string number, string title, string body, string status, out Text statusText)
         {
             Vector2 size = new Vector2(340f, 240f);
             Image img = Rounded(parent, name, pos, size, Color.white, 0.4f);

@@ -25,9 +25,11 @@ import numpy as np
 import soundfile as sf
 from kokoro_onnx import Kokoro
 
-VOICE = "am_onyx"         # deep, steady male: the drill sergeant
-SPEED = 0.85              # a little slower than conversation: unhurried, easy to follow
-SENTENCE_PAUSE = 0.5      # seconds of silence between two sentences of one line
+# Blend of voice styles (weights sum to 1): onyx keeps it deep, fenrir adds energy. Tweak the weights to taste.
+VOICE_MIX = {"am_onyx": 0.5, "am_fenrir": 0.5}
+VOICE = None              # built from VOICE_MIX in main()
+SPEED = 1.05              # brisk, drill-sergeant pace (0.85 sounded sleepy)
+SENTENCE_PAUSE = 0.3      # seconds of silence between two sentences of one line
 LEAD_IN, TAIL = 0.12, 0.25
 TARGET_RMS_DB = -20.0     # every line equally loud
 PEAK_LIMIT_DB = -1.5
@@ -89,6 +91,8 @@ def main():
 
     only = {s.strip() for s in args.only.split(",") if s.strip()}
     kokoro = Kokoro(os.path.join(args.model_dir, "kokoro-v1.0.onnx"), os.path.join(args.model_dir, "voices-v1.0.bin"))
+    global VOICE
+    VOICE = sum(w * kokoro.get_voice_style(name) for name, w in VOICE_MIX.items()).astype(np.float32)
     os.makedirs(args.out, exist_ok=True)
 
     with open(args.script, encoding="utf-8") as f:

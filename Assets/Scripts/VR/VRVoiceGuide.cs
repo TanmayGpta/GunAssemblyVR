@@ -29,6 +29,8 @@ namespace VRArmory
         Sgt_Grip, Sgt_Trigger, Sgt_Thumbsticks, Sgt_PrimaryButton, Sgt_SecondaryButton, Sgt_Ready,
         // Fire range: the sergeant's live-fire training.
         Rng_Offer, Rng_NotReady, Rng_Handover, Rng_Magazine, Rng_Load, Rng_FireWhenReady, Rng_CeaseFire, Rng_Declined,
+        // Unlimited mode, first empty magazine: _B / _Y names the release button of the hand holding the pistol.
+        Rng_Reload_B, Rng_Reload_Y,
     }
 
     [Serializable]

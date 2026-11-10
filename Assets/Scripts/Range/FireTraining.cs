@@ -23,6 +23,8 @@ namespace VRArmory
         public PistolFiring firing;
         public PistolMagazine ammo;
         public RangeScoring scoring;
+        [Tooltip("Weapon / mode / targets screen shown when the trainee reaches the booth.")]
+        public RangeModeMenu menu;
         public AssemblyPart frame;
         public VRAssemblyGrab frameGrab;
 
@@ -52,8 +54,16 @@ namespace VRArmory
         public static FireTraining Instance { get; private set; }
         public bool CanBegin => !Running && functionCheck != null && functionCheck.Passed;
 
-        private enum Phase { Off, Magazine, Load, Ready, Firing, Results }
+        // The pistol only fires (and loads) during a range session, never in the armory.
+        public static bool LiveFireAllowed => Instance != null && Instance.phase >= Phase.Magazine;
+
+        private enum Phase { Off, Choose, Magazine, Load, Ready, Firing, Results }
         private Phase phase = Phase.Off;
+        private bool timedMode = true;
+        private bool movingTargets;
+        private bool reloadHintGiven;
+        private readonly List<RangeTargetMover> movers = new List<RangeTargetMover>();
+        private readonly List<bool> moversWereOn = new List<bool>();
         private float elapsed;
         private bool timing;
         private int shots;
@@ -82,6 +92,11 @@ namespace VRArmory
             endButton.onClick.AddListener(Stop);
             retryButton.onClick.AddListener(Retry);
             finishButton.onClick.AddListener(Stop);
+            if (menu != null)
+            {
+                menu.Chosen += OnChosen;
+                menu.Cancelled += Stop;
+            }
             Canvas canvas = panel.GetComponent<Canvas>();
             if (canvas != null) canvas.worldCamera = Camera.main;
             if (desktopHint != null) desktopHint.gameObject.SetActive(!VRPlatformSwitch.IsVR);
@@ -93,6 +108,11 @@ namespace VRArmory
             if (Instance == this) Instance = null;
             if (sergeant != null) sergeant.TrainingRequested -= Begin;
             if (firing != null) firing.Fired -= OnFired;
+            if (menu != null)
+            {
+                menu.Chosen -= OnChosen;
+                menu.Cancelled -= Stop;
+            }
         }
 
         // ---------- Flow ----------
@@ -103,10 +123,51 @@ namespace VRArmory
             sergeant.Busy = true;
             LockMovement(true);
             MovePlayerToBooth();
+            phase = Phase.Choose;
+            if (menu != null) menu.Open();
+            else OnChosen(0, true, false);
+        }
+
+        // From the menu: lay out the weapon and start the first round in that mode.
+        private void OnChosen(int weapon, bool timed, bool moving)
+        {
+            if (phase != Phase.Choose) return;
+            timedMode = timed;
+            movingTargets = moving;
+            reloadHintGiven = false;
+            frame.gameObject.SetActive(true);
+            if (ammo.magazine != null) ammo.magazine.gameObject.SetActive(true);
             LayOutWeapon();
+            ammo.refillOnInsert = !timed; // unlimited: every magazine pushed in is full
+            SetTargets(true);
+            firing.Fired -= OnFired;
             firing.Fired += OnFired;
+            if (desktopHint != null) desktopHint.text = timed ? VRTrainingText.RangeBoothDesktopHint : VRTrainingText.RangeUnlimitedDesktopHint;
             panel.gameObject.SetActive(true);
             StartRound(true);
+        }
+
+        // on: stationary (lane centres, nothing covering anything) or moving, as chosen. Off: back as they were.
+        private void SetTargets(bool on)
+        {
+            if (on)
+            {
+                movers.Clear();
+                moversWereOn.Clear();
+                foreach (RangeTargetMover m in FindObjectsOfType<RangeTargetMover>())
+                {
+                    movers.Add(m);
+                    moversWereOn.Add(m.enabled);
+                    bool move = timedMode && movingTargets;
+                    m.enabled = move;
+                    if (!move) m.ResetToLane();
+                }
+                return;
+            }
+            for (int i = 0; i < movers.Count; i++)
+                if (movers[i] != null) movers[i].enabled = moversWereOn[i];
+            movers.Clear();
+            moversWereOn.Clear();
         }
 
         // first: the full briefing (magazine facts); a retry goes straight to loading.
@@ -143,23 +204,46 @@ namespace VRArmory
         public void Stop()
         {
             if (!Running) return;
+            bool hadRound = phase != Phase.Choose;
             phase = Phase.Off;
             timing = false;
+            if (menu != null && menu.IsOpen) menu.Close();
+            if (hadRound) SetTargets(false);
             firing.Fired -= OnFired;
             if (voice != null) voice.Stop();
             panel.gameObject.SetActive(false);
             MovePanel(false, false);
             if (firing.effects != null) firing.effects.ClearHoles();
             ammo.refillOnInsert = true;
-            frame.RestoreHome();
-            if (ammo.magazine != null) ammo.magazine.RestoreHome();
+            // Desktop: dropping the interactor's hold (its OnDisable lets go of the held part and the off hand).
+            DesktopAssemblyInteractor desk = FindObjectOfType<DesktopAssemblyInteractor>();
+            if (desk != null && desk.enabled && (frame.IsHeld || frame.IsInOffHand || (ammo.magazine != null && ammo.magazine.IsHeld)))
+            {
+                desk.enabled = false;
+                desk.enabled = true;
+            }
+            PutAway(frame);
+            PutAway(ammo.magazine);
             LockMovement(false);
             sergeant.Busy = false;
         }
 
+        // Out of the hand, back to the bench and hidden until the next round (Begin shows it again).
+        private static void PutAway(AssemblyPart part)
+        {
+            if (part == null) return;
+            VRAssemblyGrab grab = part.GetComponent<VRAssemblyGrab>();
+            if (grab != null && grab.isSelected && grab.interactionManager != null)
+                grab.interactionManager.CancelInteractableSelection((IXRSelectInteractable)grab);
+            if (part.IsInOffHand) part.EndOffHandHold();
+            part.RestoreHome();
+            if (!part.IsSeated) part.SnapHome(); // a magazine still in the grip stays there, hidden with the pistol
+            part.gameObject.SetActive(false);
+        }
+
         void Update()
         {
-            if (!Running) return;
+            if (!Running || phase == Phase.Choose) return; // the menu has the controls while it is up
 
             switch (phase)
             {
@@ -174,7 +258,7 @@ namespace VRArmory
                     if (ammo.Chambered)
                     {
                         phase = Phase.Ready;
-                        sergeant.Say(VoiceLine.Rng_FireWhenReady);
+                        if (timedMode) sergeant.Say(VoiceLine.Rng_FireWhenReady); // that line is about the clock
                     }
                     break;
             }
@@ -191,15 +275,23 @@ namespace VRArmory
 
         private void OnFired()
         {
-            if (phase == Phase.Results || phase == Phase.Off) return;
+            if (phase < Phase.Magazine || phase == Phase.Results) return;
             shots++;
-            if (!timing)
+            if (phase != Phase.Firing)
             {
-                timing = true;
+                timing = timedMode;
                 phase = Phase.Firing;
                 if (voice != null) voice.Stop(); // he stops talking once the shooting starts
             }
-            if (ammo.RoundsLeft == 0) End();
+            if (timedMode && ammo.RoundsLeft == 0) End();
+            else if (!timedMode && ammo.RoundsLeft == 0 && !reloadHintGiven)
+            {
+                // Unlimited: the first empty magazine of the session gets the how-to-reload line, only once.
+                reloadHintGiven = true;
+                bool left = frameGrab != null && frameGrab.isSelected && VRHands.Instance != null
+                            && VRHands.Instance.IsLeft(frameGrab.interactorsSelecting[0]);
+                sergeant.Say(left ? VoiceLine.Rng_Reload_Y : VoiceLine.Rng_Reload_B);
+            }
         }
 
         private void End()
@@ -255,7 +347,7 @@ namespace VRArmory
         private void UpdatePanel()
         {
             stepText.text = StepText();
-            timeText.text = $"TIME\n<size=34><b>{elapsed:0.00}</b></size>";
+            timeText.text = timedMode ? $"TIME\n<size=34><b>{elapsed:0.00}</b></size>" : $"SHOTS\n<size=34><b>{shots}</b></size>";
             roundsText.text = $"ROUNDS\n<size=34><b>{ammo.RoundsLeft}</b></size> / {ammo.capacity}";
             scoreText.text = $"SCORE\n<size=34><b>{scoring.TotalScore}</b></size>";
         }
@@ -268,8 +360,8 @@ namespace VRArmory
                 case Phase.Load:
                     if (!ammo.MagazineInserted) return ammo.magazine.IsHeld ? VRTrainingText.RangeStepInsert : VRTrainingText.RangeStepLoad;
                     return VRTrainingText.RangeStepRack;
-                case Phase.Ready: return VRTrainingText.RangeStepReady;
-                case Phase.Firing: return VRTrainingText.RangeStepFiring;
+                case Phase.Ready: return timedMode ? VRTrainingText.RangeStepReady : VRTrainingText.RangeStepUnlimited;
+                case Phase.Firing: return timedMode ? VRTrainingText.RangeStepFiring : VRTrainingText.RangeStepUnlimited;
                 case Phase.Results: return VRTrainingText.RangeStepDone;
             }
             return "";

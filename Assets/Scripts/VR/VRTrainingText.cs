@@ -196,6 +196,27 @@ namespace VRArmory
         public const string RangeRetry = "TRY AGAIN";
         public const string RangeFinish = "FINISH";
         public const string RangeBoothDesktopHint = "[ENTER] TRY AGAIN     [BACKSPACE] FINISH / END";
+        // Range menu (weapon -> mode -> targets).
+        public const string RangeMenuWeaponTitle = "Choose your weapon";
+        public const string RangeMenuModeTitle = "Choose a mode";
+        public const string RangeMenuTargetsTitle = "Choose your targets";
+        public const string RangeMenuBack = "BACK";
+        public const string RangeModeUnlimited = "Unlimited";
+        public const string RangeModeUnlimitedBody = "No timer, endless ammo. Drop an empty magazine, load a fresh one.";
+        public const string RangeModeUnlimitedPill = "FREE PRACTICE";
+        public const string RangeModeTimed = "Timed";
+        public static string RangeTimedCardBody(int magazine) => $"One magazine, {magazine} rounds, against the clock.";
+        public const string RangeModeTimedPill = "SCORED";
+        public const string RangeTargetsStationary = "Stationary";
+        public const string RangeTargetsStationaryBody = "All three targets stand still, each in clear view.";
+        public const string RangeTargetsMoving = "Moving";
+        public const string RangeTargetsMovingBody = "The targets sweep side to side across their lanes.";
+        public const string RangeTargetsPill = "TIMED";
+        public const string RangeWeaponPistolBody = "9 mm semi-automatic service pistol.";
+        public static string RangeWeaponMagazinePill(int magazine) => $"MAGAZINE  {magazine} ROUNDS";
+        public const string RangeMenuDesktopHint = "[1] / [2] CHOOSE     [BACKSPACE] BACK";
+        public const string RangeStepUnlimited = "Fire at will. Magazine empty? Drop it (B / Y, desktop M) and load the fresh one from the counter.";
+        public const string RangeUnlimitedDesktopHint = "[BACKSPACE] END";
         public const string SergeantRole = "INSTRUCTOR";
         public const string SectionBriefing = "BRIEFING";
         public const string SectionControls = "CONTROLS";
@@ -284,6 +305,8 @@ namespace VRArmory
                 case VoiceLine.Rng_FireWhenReady: return "Safety off. The clock starts with your first shot. Farther targets, and the centre rings, score more. Fire when ready.";
                 case VoiceLine.Rng_CeaseFire: return "Cease fire! Magazine empty. Let's see how you did.";
                 case VoiceLine.Rng_Declined: return "Come back when you're ready, soldier.";
+                case VoiceLine.Rng_Reload_B: return "Magazine empty! Press B to drop it. Then pick up a fresh, fully loaded magazine from the counter.";
+                case VoiceLine.Rng_Reload_Y: return "Magazine empty! Press Y to drop it. Then pick up a fresh, fully loaded magazine from the counter.";
                 default: return "";
             }
         }

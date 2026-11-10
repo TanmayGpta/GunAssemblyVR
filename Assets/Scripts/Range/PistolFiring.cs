@@ -76,6 +76,7 @@ namespace VRArmory
         {
             // During the function check the hammer falls on an empty chamber: only live once the check has passed.
             if (!functionCheck.Passed || !functionCheck.HasRig) return;
+            if (!FireTraining.LiveFireAllowed) return; // only in a range session: in the armory the hammer just clicks
             bool lockOpen = false;
             if (ammo != null && !ammo.TakeChamberedRound(out lockOpen)) return; // empty chamber: only the hammer's click
             Fire(lockOpen);
