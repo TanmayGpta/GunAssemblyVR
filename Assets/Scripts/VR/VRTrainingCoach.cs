@@ -185,7 +185,11 @@ namespace VRArmory
             idleTime = 0f;
             triggerMin = triggerMax = functionCheck.TriggerPull;
             if (fresh) RemindersGiven = 0;
+            int requests = voice.PlayRequests;
             Speak(fresh, cycles);
+            // A step with nothing new to say (the trainee went back, or its line was already given): the previous step's
+            // instruction is out of date and stops. A fresh "try again" from a rejected part is still heard.
+            if (voice.PlayRequests == requests && Time.time - lastTryAgainTime >= 4f) voice.CutInstruction();
         }
 
         // ---------- What to say (and show) for each cue ----------
@@ -344,7 +348,7 @@ namespace VRArmory
             if (TraineeActing())
             {
                 CancelDemo();
-                voice.ClearQueue();
+                voice.CutInstruction(); // the "watch..." line stops too, not only what was queued after it
                 return;
             }
 

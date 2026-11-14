@@ -90,6 +90,7 @@ namespace VRArmory
         // waiting are kept (and not doubled), so the trainee always hears "Well done." before the next instruction.
         public void Play(params VoiceLine[] lines)
         {
+            PlayRequests++;
             ClearQueue();
             foreach (VoiceLine l in lines)
             {
@@ -106,6 +107,17 @@ namespace VRArmory
             {
                 if (!LetsFinish(queue[i])) queue.RemoveAt(i);
             }
+        }
+
+        // Play() calls so far: lets a caller tell whether anything new was asked for.
+        public int PlayRequests { get; private set; }
+
+        // The instruction is out of date: the ones still to come are dropped and the current one fades out, unless it
+        // is a confirmation (those are always heard whole).
+        public void CutInstruction()
+        {
+            ClearQueue();
+            if (Current != VoiceLine.None && !LetsFinish(Current)) CutCurrent();
         }
 
         // Silence now (fades the current line out).
