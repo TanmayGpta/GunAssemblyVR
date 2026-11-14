@@ -62,13 +62,38 @@ namespace VRArmory
 
         void Awake()
         {
-            functionCheck.desktopInput = false;
-            functionCheck.safetyControl = "[A / X BUTTON]";
-            functionCheck.triggerControl = "[INDEX TRIGGER]";
-            functionCheck.rackControl = "[OTHER HAND: GRIP SLIDE, PULL BACK, LET GO]";
+            ConfigureCheck(functionCheck);
 
             leftPrimary = new InputAction("Left Primary Button", InputActionType.Button, "<XRController>{LeftHand}/primaryButton");
             rightPrimary = new InputAction("Right Primary Button", InputActionType.Button, "<XRController>{RightHand}/primaryButton");
+        }
+
+        private static void ConfigureCheck(FunctionCheck check)
+        {
+            check.desktopInput = false;
+            check.safetyControl = "[A / X BUTTON]";
+            check.triggerControl = "[INDEX TRIGGER]";
+            check.rackControl = "[OTHER HAND: GRIP SLIDE, PULL BACK, LET GO]";
+        }
+
+        // Points the controls at another weapon (the range can use a weapon other than the bench one). The rack grip
+        // and safety marker belong to one weapon: the old ones are removed and rebuilt on the new weapon.
+        public void Retarget(FunctionCheck check, VRAssemblyGrab grab)
+        {
+            if (check == null || check == functionCheck) return;
+            bool on = enabled;
+            enabled = false; // unsubscribes from the old check
+            if (rackGrip != null) Destroy(rackGrip.gameObject);
+            if (safetyGhost != null && safetyGhost.parent != null) Destroy(safetyGhost.parent.gameObject);
+            if (safetyLine != null) Destroy(safetyLine.gameObject);
+            rackGrip = null;
+            safetyGhost = null;
+            safetyLine = null;
+            rackGripBuilt = false;
+            functionCheck = check;
+            if (grab != null) frameGrab = grab;
+            ConfigureCheck(check);
+            enabled = on;
         }
 
         void OnEnable()

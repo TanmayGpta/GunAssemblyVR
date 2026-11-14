@@ -37,6 +37,7 @@ namespace VRArmory
         Tec9_Pick_Pin, Tec9_Place_Pin, Tec9_Pick_Magazine, Tec9_Place_Magazine,
         Tec9_FC_TriggerDemo_First, Tec9_FC_BoltDemo, Tec9_FC_YourTurn_Rack, Tec9_FC_HoldWhileRacking, Tec9_FC_ReleasedTooEarly,
         Rng_Tec9_Magazine, Rng_Tec9_Load, Rng_Tec9_FireWhenReady, Rng_Tec9_Reload_B, Rng_Tec9_Reload_Y,
+        Tec9_Briefing,
     }
 
     [Serializable]

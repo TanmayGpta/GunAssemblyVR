@@ -205,8 +205,12 @@ namespace VRArmory.Editor
         static readonly Vector3 BoothEye = new Vector3(0f, 1.55f, 8.55f);
         static readonly Vector3 PistolSpot = new Vector3(-0.12f, 0.85f, 9.15f);
         static readonly Vector3 MagazineSpot = new Vector3(0.18f, 0.85f, 9.15f);
-        static readonly Vector3 BoothPanelPos = new Vector3(-0.42f, 1.42f, 9.0f);  // clear of the booth wall (X -0.75)
-        static readonly Vector3 ResultsPos = new Vector3(0f, 1.45f, 9.35f);       // over the counter, straight ahead
+        // High over the lane, out past the counter toward the dummies (about 1.9 m from the eye, 30 degrees up), only
+        // slightly tilted toward the trainee; above the line of sight downrange.
+        static readonly Vector3 BoothPanelPos = new Vector3(0f, 2.45f, 10.2f);
+        const float BoothPanelTilt = 15f;    // degrees its face leans down toward the trainee
+        const float BoothPanelScale = 1.6f;  // whole panel bigger (layout and text unchanged)
+        static readonly Vector3 ResultsPos = new Vector3(0f, 1.6f, 9.95f);       // over the lane, straight ahead
         const float BoothW = 600f, BoothH = 440f;
         const float PromptW = 760f, PromptH = 300f; // canvas units = mm
         const string SergeantRootName = "Range_Sergeant";
@@ -293,7 +297,8 @@ namespace VRArmory.Editor
             Transform magSpot = Point(booth, "Magazine_Spot", MagazineSpot, Quaternion.identity);
 
             GameObject canvas = IntroSceneSetup.WorldCanvas(booth, "Booth_Panel", new Vector2(BoothW, BoothH), true);
-            canvas.transform.SetPositionAndRotation(BoothPanelPos, Quaternion.LookRotation(BoothPanelPos - BoothEye));
+            canvas.transform.SetPositionAndRotation(BoothPanelPos, Quaternion.Euler(-BoothPanelTilt, 0f, 0f)); // faces back up the lane
+            canvas.transform.localScale *= BoothPanelScale;
             Transform p = canvas.transform;
             float cw = BoothW - 70f, right = BoothW * 0.5f - 35f;
 
@@ -361,6 +366,10 @@ namespace VRArmory.Editor
                     magazineModel = ammo != null && ammo.magazine != null ? ammo.magazine.transform : null,
                     magazineSeat = ammo != null && ammo.magazineWell != null ? ammo.magazineWell.transform : null,
                     functionCheck = f.functionCheck,
+                    // Frame-space axes for the card picture when the function check has not run this session (a weapon
+                    // unlocked earlier): without them the default axes turned the gun end-on and blew it up.
+                    muzzleLocal = kit != null ? kit.muzzleLocal : Vector3.left,
+                    upLocal = kit != null ? kit.upLocal : Vector3.forward,
                 });
             }
             m.weapons = weapons.ToArray();

@@ -445,11 +445,13 @@ namespace VRArmory.Editor
             soldier.transform.SetPositionAndRotation(SoldierPos + Vector3.up * lift, Quaternion.LookRotation(toPlayer));
 
             // Mixamo exports vary in scale: make him SoldierHeight tall, feet on the platform.
-            Bounds b = RendererBounds(soldier);
+            // Bounds from the posed mesh's vertices: Renderer.bounds is stale right after instantiating (and a skinned
+            // mesh's bounds box is padded), which left him floating.
+            Bounds b = PosedMeshBounds(soldier);
             if (b.size.y > 0.01f)
             {
                 soldier.transform.localScale *= SoldierHeight / b.size.y;
-                b = RendererBounds(soldier);
+                b = PosedMeshBounds(soldier);
                 soldier.transform.position += Vector3.up * (SoldierPos.y + lift - b.min.y);
             }
             foreach (SkinnedMeshRenderer smr in soldier.GetComponentsInChildren<SkinnedMeshRenderer>(true))
@@ -474,6 +476,39 @@ namespace VRArmory.Editor
             disc.sprite = CircleSprite;
             disc.color = new Color(0f, 0f, 0f, 0.55f);
             return animator;
+        }
+
+        // World bounds of every mesh vertex in its current pose (skinned meshes baked).
+        static Bounds PosedMeshBounds(GameObject go)
+        {
+            Bounds b = new Bounds();
+            bool any = false;
+            var baked = new Mesh();
+            foreach (Renderer r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                Vector3[] verts;
+                Matrix4x4 m;
+                if (r is SkinnedMeshRenderer smr && smr.sharedMesh != null)
+                {
+                    smr.BakeMesh(baked, true); // scale applied, so place it without the renderer's scale
+                    verts = baked.vertices;
+                    m = Matrix4x4.TRS(smr.transform.position, smr.transform.rotation, Vector3.one);
+                }
+                else if (r.TryGetComponent(out MeshFilter mf) && mf.sharedMesh != null)
+                {
+                    verts = mf.sharedMesh.vertices;
+                    m = r.transform.localToWorldMatrix;
+                }
+                else continue;
+                foreach (Vector3 v in verts)
+                {
+                    Vector3 p = m.MultiplyPoint3x4(v);
+                    if (!any) { b = new Bounds(p, Vector3.zero); any = true; }
+                    else b.Encapsulate(p);
+                }
+            }
+            Object.DestroyImmediate(baked);
+            return any ? b : RendererBounds(go);
         }
 
         static Bounds RendererBounds(GameObject go)

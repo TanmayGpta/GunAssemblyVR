@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Unity.XR.CoreUtils;
 using UnityEngine;
@@ -56,7 +57,7 @@ namespace VRArmory
         public string WeaponId { get; private set; } = "";
         private bool IsTec9 => WeaponId == VRTrainingText.Tec9Id;
         public static FireTraining Instance { get; private set; }
-        public bool CanBegin => !Running && functionCheck != null && functionCheck.Passed;
+        public bool CanBegin => !Running && AnyWeaponAvailable();
 
         // The pistol only fires (and loads) during a range session, never in the armory.
         public static bool LiveFireAllowed => Instance != null && Instance.phase >= Phase.Magazine;
@@ -66,6 +67,8 @@ namespace VRArmory
         private bool timedMode = true;
         private bool movingTargets;
         private bool reloadHintGiven;
+        private bool preparing;
+        private VRTrainingCoach mutedCoach;
         private readonly List<RangeTargetMover> movers = new List<RangeTargetMover>();
         private readonly List<bool> moversWereOn = new List<bool>();
         private float elapsed;
@@ -91,7 +94,7 @@ namespace VRArmory
             sideRot = panel.transform.rotation;
             if (sergeant != null)
             {
-                sergeant.CanStart = () => functionCheck != null && functionCheck.Passed;
+                sergeant.CanStart = AnyWeaponAvailable;
                 sergeant.TrainingRequested += Begin;
             }
             endButton.onClick.AddListener(Stop);
@@ -120,35 +123,106 @@ namespace VRArmory
             }
         }
 
-        // The range uses the weapon assembled in this session (WeaponKitSwitch.Active): its live fire, magazine and grab;
-        // the other weapons' live fire is switched off and their cards are hidden in the menu.
+        // Every weapon assembled and checked once (in any session) stays available here; the one picked is wired in
+        // (its live fire, magazine, grab and the VR trigger / rack controls) and the others' live fire is off. A weapon
+        // not built in this session is put together and checked instantly when picked.
         private void SelectWeapon()
         {
             if (menu == null || menu.weapons.Length == 0) return;
-            WeaponKitSwitch kits = WeaponKitSwitch.Instance;
-            FunctionCheck active = kits != null && kits.Active != null && kits.Active.functionCheck != null ? kits.Active.functionCheck : functionCheck;
-            int pick = -1;
+            int pick = IndexOf(ActiveKit != null ? ActiveKit.functionCheck : functionCheck);
+            if (pick >= 0) Use(pick);
+        }
+
+        private static WeaponKit ActiveKit => WeaponKitSwitch.Instance != null ? WeaponKitSwitch.Instance.Active : null;
+
+        private int IndexOf(FunctionCheck check)
+        {
             for (int i = 0; i < menu.weapons.Length; i++)
-            {
-                RangeWeapon w = menu.weapons[i];
-                if (w != null && w.firing != null && w.functionCheck == active) pick = i;
-            }
-            if (pick < 0) return; // old setup without per-weapon live fire: keep the wired weapon
+                if (menu.weapons[i] != null && menu.weapons[i].firing != null && menu.weapons[i].functionCheck == check) return i;
+            return -1;
+        }
+
+        private static WeaponKit KitOf(RangeWeapon w)
+        {
+            if (w == null || WeaponKitSwitch.Instance == null) return null;
+            foreach (WeaponKit k in WeaponKitSwitch.Instance.kits)
+                if (k != null && k.functionCheck == w.functionCheck) return k;
+            return null;
+        }
+
+        // Ready now (checked in this scene) or unlocked by an earlier session.
+        private bool WeaponAvailable(int i)
+        {
+            RangeWeapon w = menu.weapons[i];
+            if (w == null || w.firing == null || w.functionCheck == null) return false;
+            if (w.functionCheck.Passed) return true;
+            WeaponKit kit = KitOf(w);
+            return kit != null && kit.RangeUnlocked;
+        }
+
+        private bool AnyWeaponAvailable()
+        {
+            if (menu == null || menu.weapons.Length == 0 || IndexOf(functionCheck) < 0) return functionCheck != null && functionCheck.Passed;
+            for (int i = 0; i < menu.weapons.Length; i++) if (WeaponAvailable(i)) return true;
+            return false;
+        }
+
+        private void Use(int index)
+        {
             for (int i = 0; i < menu.weapons.Length; i++)
             {
                 PistolFiring f = menu.weapons[i] != null ? menu.weapons[i].firing : null;
                 if (f == null) continue;
-                f.enabled = i == pick;
-                if (f.ammo != null) f.ammo.enabled = i == pick;
+                f.enabled = i == index;
+                if (f.ammo != null) f.ammo.enabled = i == index;
             }
-            RangeWeapon chosen = menu.weapons[pick];
+            RangeWeapon chosen = menu.weapons[index];
+            if (firing != null) firing.Fired -= OnFired;
             firing = chosen.firing;
             ammo = firing.ammo;
             functionCheck = firing.functionCheck;
             frameGrab = firing.frameGrab;
             if (functionCheck != null && functionCheck.frame != null) frame = functionCheck.frame;
             WeaponId = chosen.id;
-            menu.Restrict(pick);
+            PointControlsAt(functionCheck, frameGrab);
+        }
+
+        // The VR trigger / rack / safety input follows the weapon in use (it is the bench weapon's in the armory).
+        private static void PointControlsAt(FunctionCheck check, VRAssemblyGrab grab)
+        {
+            VRFunctionCheckControls controls = WeaponKitSwitch.Instance != null ? WeaponKitSwitch.Instance.functionCheckControls : null;
+            if (controls != null) controls.Retarget(check, grab);
+        }
+
+        // A weapon not built in this session: every part seated and the function check passed, without a trainee.
+        private IEnumerator MakeReady(RangeWeapon w)
+        {
+            WeaponKit kit = KitOf(w);
+            if (kit == null || w.functionCheck.Passed) yield break;
+            if (kit == ActiveKit && GunAssemblyManager.Instance != null)
+            {
+                // The bench weapon: through the assembly manager, so its steps and menu stay consistent (no best time).
+                VRTrainingCoach coach = WeaponKitSwitch.Instance.coach;
+                if (coach != null && coach.enabled) { coach.enabled = false; mutedCoach = coach; } // quiet at the range
+                GunAssemblyManager.Instance.DebugCompleteAll();
+                for (float t = 0f; t < 5f && !w.functionCheck.Passed; t += Time.deltaTime) yield return null;
+                yield break;
+            }
+            kit.gameObject.SetActive(true); // the other weapon's bench group, off since the scene loaded
+            if (VRPlatformSwitch.IsVR)
+                foreach (VRAssemblyGrab g in kit.GetComponentsInChildren<VRAssemblyGrab>(true)) g.enabled = true;
+            yield return null; // its parts and sockets run Start first
+            foreach (AssemblyStep step in kit.steps)
+            {
+                if (step.socket == null) continue;
+                step.socket.DebugSeat(quiet: true);
+                yield return null;
+            }
+            // As after a real assembly: every socket open, so the magazine goes in and out without an
+            // "out of sequence" warning.
+            foreach (SnapSocket s in kit.GetComponentsInChildren<SnapSocket>(true)) s.SetUnlocked(true);
+            yield return new WaitForSeconds(0.2f); // seat animations done before the rig records the rest poses
+            w.functionCheck.DebugPass(null);
         }
 
         // The weapon's own version of a sergeant line, where its wording differs (TEC-9: no safety, charging knob,
@@ -171,11 +245,17 @@ namespace VRArmory
 
         public void Begin()
         {
-            if (Running || functionCheck == null || !functionCheck.Passed) return;
+            if (Running || !AnyWeaponAvailable()) return;
             sergeant.Busy = true;
             LockMovement(true);
             MovePlayerToBooth();
             phase = Phase.Choose;
+            if (menu != null && IndexOf(functionCheck) >= 0)
+            {
+                var available = new bool[menu.weapons.Length];
+                for (int i = 0; i < available.Length; i++) available[i] = WeaponAvailable(i);
+                menu.SetAvailable(available);
+            }
             if (menu != null) menu.Open();
             else OnChosen(0, true, false);
         }
@@ -183,7 +263,25 @@ namespace VRArmory
         // From the menu: lay out the weapon and start the first round in that mode.
         private void OnChosen(int weapon, bool timed, bool moving)
         {
-            if (phase != Phase.Choose) return;
+            if (phase != Phase.Choose || preparing) return;
+            StartCoroutine(PrepareAndStart(weapon, timed, moving));
+        }
+
+        private IEnumerator PrepareAndStart(int weapon, bool timed, bool moving)
+        {
+            if (menu != null && weapon >= 0 && weapon < menu.weapons.Length && IndexOf(functionCheck) >= 0)
+            {
+                preparing = true;
+                Use(weapon);
+                yield return MakeReady(menu.weapons[weapon]);
+                preparing = false;
+                if (phase != Phase.Choose) yield break; // ended while it was being readied
+            }
+            StartWithWeapon(timed, moving);
+        }
+
+        private void StartWithWeapon(bool timed, bool moving)
+        {
             timedMode = timed;
             movingTargets = moving;
             reloadHintGiven = false;
@@ -277,6 +375,9 @@ namespace VRArmory
             PutAway(frame);
             PutAway(ammo.magazine);
             LockMovement(false);
+            if (ActiveKit != null && ActiveKit.functionCheck != null && ActiveKit.frame != null)
+                PointControlsAt(ActiveKit.functionCheck, ActiveKit.frame.GetComponent<VRAssemblyGrab>());
+            if (mutedCoach != null) { mutedCoach.enabled = true; mutedCoach = null; }
             sergeant.Busy = false;
         }
 
@@ -454,12 +555,27 @@ namespace VRArmory
             part.SnapHome();
         }
 
+        // From the meshes' corners: Renderer.bounds is stale right after a part is moved or its weapon switched on (a
+        // weapon readied this session sat floating above the counter).
         private static Bounds RendererBounds(Transform t)
         {
-            Renderer[] rs = t.GetComponentsInChildren<Renderer>();
-            if (rs.Length == 0) return new Bounds(t.position, Vector3.zero);
-            Bounds b = rs[0].bounds;
-            foreach (Renderer r in rs) b.Encapsulate(r.bounds);
+            Bounds b = new Bounds(t.position, Vector3.zero);
+            bool any = false;
+            foreach (MeshRenderer r in t.GetComponentsInChildren<MeshRenderer>())
+            {
+                if (!r.enabled || r.GetComponentInParent<SnapSocket>() != null) continue; // no hidden ghosts
+                MeshFilter mf = r.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+                Bounds mb = mf.sharedMesh.bounds;
+                Matrix4x4 m = r.transform.localToWorldMatrix;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 c = mb.center + Vector3.Scale(mb.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    Vector3 p = m.MultiplyPoint3x4(c);
+                    if (!any) { b = new Bounds(p, Vector3.zero); any = true; }
+                    else b.Encapsulate(p);
+                }
+            }
             return b;
         }
 

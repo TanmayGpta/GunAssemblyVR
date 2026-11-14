@@ -50,6 +50,9 @@ namespace VRArmory
         public AssemblyStep CurrentStep => CurrentStepIndex < steps.Count ? steps[CurrentStepIndex] : null;
         public bool HasStarted { get; private set; }
         public bool IsComplete { get; private set; }
+        // Finished by DebugCompleteAll (Skip Assembly, or the range readying a weapon built in an earlier session):
+        // no best time is recorded.
+        public bool AutoCompleted { get; private set; }
         public int MistakeCount { get; private set; }
         public float ElapsedSeconds { get; private set; }
 
@@ -120,7 +123,9 @@ namespace VRArmory
         // passes the function check, so live fire can be tested without assembling the pistol each time.
         public void DebugCompleteAll()
         {
-            if (!IsComplete) StartCoroutine(DebugCompleteRoutine());
+            if (IsComplete) return;
+            AutoCompleted = true;
+            StartCoroutine(DebugCompleteRoutine());
         }
 
         private IEnumerator DebugCompleteRoutine()
@@ -180,6 +185,7 @@ namespace VRArmory
                 if (!IsComplete)
                 {
                     IsComplete = true;
+                    if (WeaponKitSwitch.Instance != null && WeaponKitSwitch.Instance.Active != null) WeaponKitSwitch.Instance.Active.UnlockRange();
                     AllStepsCompleted?.Invoke();
                 }
                 return;

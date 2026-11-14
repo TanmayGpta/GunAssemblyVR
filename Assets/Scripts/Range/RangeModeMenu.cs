@@ -64,7 +64,7 @@ namespace VRArmory
         private enum Step { Weapon, Mode, Targets }
         private Step step;
         private int weapon;
-        private int onlyWeapon = -1;
+        private bool[] available;
         private readonly System.Collections.Generic.List<GameObject> modelCopies = new System.Collections.Generic.List<GameObject>();
 
         void Start()
@@ -86,25 +86,35 @@ namespace VRArmory
             if (!IsOpen) panel.gameObject.SetActive(false);
         }
 
-        // Only the weapon assembled in this session can go to the range: the other cards are hidden and the one left is
-        // centred. -1 = all.
-        public void Restrict(int index)
+        // Which weapons can go to the range (assembled now or in an earlier session): the others' cards are hidden and
+        // the ones left are spread evenly. null = all.
+        public void SetAvailable(bool[] available)
         {
-            onlyWeapon = index >= 0 && index < weapons.Length ? index : -1;
+            this.available = available;
+            int shown = 0;
+            for (int i = 0; i < weaponCards.Length; i++) if (Available(i)) shown++;
+            int slot = 0;
             for (int i = 0; i < weaponCards.Length; i++)
             {
                 if (weaponCards[i] == null) continue;
-                bool on = onlyWeapon < 0 || i == onlyWeapon;
+                bool on = Available(i);
                 weaponCards[i].gameObject.SetActive(on);
-                if (on && onlyWeapon >= 0)
-                {
-                    var rt = (RectTransform)weaponCards[i].transform;
-                    rt.anchoredPosition = new Vector2(0f, rt.anchoredPosition.y);
-                }
+                if (!on) continue;
+                var rt = (RectTransform)weaponCards[i].transform;
+                rt.anchoredPosition = new Vector2((slot - (shown - 1) * 0.5f) * 356f, rt.anchoredPosition.y);
+                slot++;
             }
         }
 
-        private bool Available(int index) => index >= 0 && index < weapons.Length && (onlyWeapon < 0 || index == onlyWeapon);
+        // The n-th shown card (desktop keys 1 / 2 / ...), -1 if none.
+        private int ShownWeapon(int n)
+        {
+            for (int i = 0; i < weapons.Length; i++)
+                if (Available(i) && n-- == 0) return i;
+            return -1;
+        }
+
+        private bool Available(int index) => index >= 0 && index < weapons.Length && (available == null || (index < available.Length && available[index]));
 
         public void Open()
         {
@@ -131,8 +141,8 @@ namespace VRArmory
                 switch (step)
                 {
                     case Step.Weapon:
-                        if (onlyWeapon >= 0) { if (key == 0) PickWeapon(onlyWeapon); }
-                        else if (key < weapons.Length) PickWeapon(key);
+                        int pick = ShownWeapon(key);
+                        if (pick >= 0) PickWeapon(pick);
                         break;
                     case Step.Mode: if (key == 0) Finish(false, false); else if (key == 1) Show(Step.Targets); break;
                     case Step.Targets: if (key < 2) Finish(true, key == 1); break;
@@ -205,6 +215,16 @@ namespace VRArmory
                 Transform spot = modelSpots[i];
                 if (w == null || w.model == null || spot == null || !Available(i)) continue;
 
+                // The weapon's kit builds it as assembled from wherever its parts are (a weapon not built this session
+                // has its slide etc. still apart on the bench, so copying the frame alone would leave them out).
+                WeaponKit kit = KitOf(w);
+                if (kit != null)
+                {
+                    GameObject copy = kit.BuildAssembledCopy(spot, modelBox);
+                    if (copy != null) modelCopies.Add(copy);
+                    continue;
+                }
+
                 Transform root = new GameObject(w.displayName + "_Model").transform;
                 root.SetParent(spot, false);
                 root.gameObject.layer = 0;
@@ -232,6 +252,7 @@ namespace VRArmory
                 side.Normalize();
                 AssemblyPart part = w.model.GetComponent<AssemblyPart>();
                 Quaternion bench = part != null ? part.HomeWorldRotation : w.model.rotation;
+                if (bench.x == 0f && bench.y == 0f && bench.z == 0f && bench.w == 0f) bench = w.model.rotation; // part never started (its kit is off this session)
                 Vector3 face = Vector3.Dot(bench * side, Vector3.up) >= 0f ? side : -side;
                 content.localRotation = Quaternion.LookRotation(Vector3.back, Vector3.up) * Quaternion.Inverse(Quaternion.LookRotation(face, up));
 
@@ -244,6 +265,14 @@ namespace VRArmory
                 root.localScale = Vector3.one * s;
                 root.localPosition = new Vector3(-b.center.x * s, -b.center.y * s, (-b.max.z * s) - 0.004f / spotScale);
             }
+        }
+
+        private static WeaponKit KitOf(RangeWeapon w)
+        {
+            if (WeaponKitSwitch.Instance == null || w.functionCheck == null) return null;
+            foreach (WeaponKit k in WeaponKitSwitch.Instance.kits)
+                if (k != null && k.functionCheck == w.functionCheck) return k;
+            return null;
         }
 
         // Bounds of every mesh under 'content', in 'space' local coordinates.

@@ -315,6 +315,7 @@ namespace VRArmory
             {
                 case VoiceLine.Intro_ChooseModule: return "Welcome. To begin, point your controller at Gun Assembly, and pull the trigger.";
                 case VoiceLine.Intro_Briefing: return "In this training, you will put a pistol together, and then check that it works. When you are ready, point at Start training, and pull the trigger.";
+                case VoiceLine.Tec9_Briefing: return "In this training, you will put the TEC-9 together, from its bolt to its magazine, and then check that it works. When you are ready, point at Start training, and pull the trigger.";
                 case VoiceLine.Common_WellDone: return "Well done.";
                 case VoiceLine.Common_Good: return "Good.";
 

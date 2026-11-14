@@ -26,6 +26,17 @@ namespace VRArmory
         // Fastest finished assembly in seconds, 0 = never finished.
         public int BestSeconds => PlayerPrefs.GetInt(BestKey, 0);
 
+        // Assembled and function-checked at least once (any session): this weapon stays available at the range.
+        private string UnlockKey => "VRArmory.RangeUnlocked." + id;
+        public bool RangeUnlocked => PlayerPrefs.GetInt(UnlockKey, 0) == 1;
+
+        public void UnlockRange()
+        {
+            if (RangeUnlocked) return;
+            PlayerPrefs.SetInt(UnlockKey, 1);
+            PlayerPrefs.Save();
+        }
+
         public void ReportTime(int seconds)
         {
             if (seconds <= 0 || (BestSeconds > 0 && BestSeconds <= seconds)) return;

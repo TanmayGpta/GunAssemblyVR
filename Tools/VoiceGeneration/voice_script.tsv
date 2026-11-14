@@ -78,3 +78,4 @@ VO_Rng_Tec9_Load.wav	Rng_Tec9_Load	Pick up the pistol. Push the magazine up into
 VO_Rng_Tec9_FireWhenReady.wav	Rng_Tec9_FireWhenReady	This pistol has no safety, so keep your finger off the trigger until you are on target. The clock starts with your first shot. Farther targets, and the centre rings, score more. Fire when ready.
 VO_Rng_Tec9_Reload_B.wav	Rng_Tec9_Reload_B	Magazine empty! The bolt does not lock open on this pistol. Press B to drop the magazine, push in a fresh one from the counter, then pull the charging knob back to load.
 VO_Rng_Tec9_Reload_Y.wav	Rng_Tec9_Reload_Y	Magazine empty! The bolt does not lock open on this pistol. Press Y to drop the magazine, push in a fresh one from the counter, then pull the charging knob back to load.
+VO_Tec9_Briefing.wav	Tec9_Briefing	In this training, you will put the TEC-9 together, from its bolt to its magazine, and then check that it works. When you are ready, point at Start training, and pull the trigger.

@@ -380,7 +380,7 @@ namespace VRArmory
         {
             int seconds = Mathf.FloorToInt(manager.ElapsedSeconds);
             resultText.text = VRTrainingText.Result(seconds, manager.MistakeCount);
-            if (WeaponKitSwitch.Instance != null && WeaponKitSwitch.Instance.Active != null)
+            if (WeaponKitSwitch.Instance != null && WeaponKitSwitch.Instance.Active != null && !manager.AutoCompleted)
                 WeaponKitSwitch.Instance.Active.ReportTime(seconds);
             Show(completePanel);
             Play(bigClip, 0.6f);

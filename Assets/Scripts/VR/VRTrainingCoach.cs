@@ -203,7 +203,7 @@ namespace VRArmory
                     voice.Play(VoiceLine.Intro_ChooseModule);
                     break;
                 case Cue.Briefing:
-                    voice.Play(VoiceLine.Intro_Briefing);
+                    voice.Play(Tec9OnBench ? VoiceLine.Tec9_Briefing : VoiceLine.Intro_Briefing);
                     break;
 
                 case Cue.PickUpPart:

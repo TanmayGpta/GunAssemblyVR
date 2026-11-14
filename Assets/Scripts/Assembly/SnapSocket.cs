@@ -296,12 +296,19 @@ namespace VRArmory
         }
 
         // Development shortcut (Skip Assembly): seats the accepted part as if it had been released here.
-        public void DebugSeat()
+        // quiet: no green "fitted" confirmation (the range readying a weapon built in an earlier session).
+        public void DebugSeat(bool quiet = false)
         {
             if (IsFilled || acceptedPart == null) return;
             IsFilled = true;
             HideGhost();
-            acceptedPart.SeatInto(transform, 0.05f, OnSnapComplete);
+            acceptedPart.SeatInto(transform, 0.05f, quiet ? (Action)OnQuietSnapComplete : OnSnapComplete);
+        }
+
+        private void OnQuietSnapComplete()
+        {
+            HideGhost();
+            Seated?.Invoke(this);
         }
 
         private void OnSnapComplete()
