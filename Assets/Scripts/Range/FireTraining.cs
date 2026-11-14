@@ -11,7 +11,8 @@ namespace VRArmory
     //      looking and turning still work); the pistol (unless already in hand) and its magazine, unloaded, are laid on
     //      the counter, like on a real range. Letting go of either puts it back on the counter.
     //   2. sergeant: pick up the magazine -> (picked up) the pistol's facts -> load and rack -> (chambered) fire when ready.
-    //   3. the clock starts with the first shot; every hit on a dummy scores (RangeScoring). One magazine, 15 rounds.
+    //   3. the clock starts with the first shot; every hit on a dummy scores (RangeScoring). One magazine (15 / 32 rounds).
+    // The weapon is the one assembled in this session (each RangeWeapon in the menu carries its own live fire).
     //   4. the last round ends it: "Cease fire", the booth panel shows score, time, hits and best shot, with Try again /
     //      Finish. "End training" stops it at any time. Finish / End unlocks the trainee.
     // The booth panel floats at the trainee's left: current instruction, time, rounds and score.
@@ -51,6 +52,9 @@ namespace VRArmory
         public Text desktopHint;
 
         public bool Running => phase != Phase.Off;
+        // WeaponKit.id of the weapon in use (the one assembled in this session).
+        public string WeaponId { get; private set; } = "";
+        private bool IsTec9 => WeaponId == VRTrainingText.Tec9Id;
         public static FireTraining Instance { get; private set; }
         public bool CanBegin => !Running && functionCheck != null && functionCheck.Passed;
 
@@ -82,6 +86,7 @@ namespace VRArmory
 
         void Start()
         {
+            SelectWeapon();
             sidePos = panel.transform.position;
             sideRot = panel.transform.rotation;
             if (sergeant != null)
@@ -113,6 +118,53 @@ namespace VRArmory
                 menu.Chosen -= OnChosen;
                 menu.Cancelled -= Stop;
             }
+        }
+
+        // The range uses the weapon assembled in this session (WeaponKitSwitch.Active): its live fire, magazine and grab;
+        // the other weapons' live fire is switched off and their cards are hidden in the menu.
+        private void SelectWeapon()
+        {
+            if (menu == null || menu.weapons.Length == 0) return;
+            WeaponKitSwitch kits = WeaponKitSwitch.Instance;
+            FunctionCheck active = kits != null && kits.Active != null && kits.Active.functionCheck != null ? kits.Active.functionCheck : functionCheck;
+            int pick = -1;
+            for (int i = 0; i < menu.weapons.Length; i++)
+            {
+                RangeWeapon w = menu.weapons[i];
+                if (w != null && w.firing != null && w.functionCheck == active) pick = i;
+            }
+            if (pick < 0) return; // old setup without per-weapon live fire: keep the wired weapon
+            for (int i = 0; i < menu.weapons.Length; i++)
+            {
+                PistolFiring f = menu.weapons[i] != null ? menu.weapons[i].firing : null;
+                if (f == null) continue;
+                f.enabled = i == pick;
+                if (f.ammo != null) f.ammo.enabled = i == pick;
+            }
+            RangeWeapon chosen = menu.weapons[pick];
+            firing = chosen.firing;
+            ammo = firing.ammo;
+            functionCheck = firing.functionCheck;
+            frameGrab = firing.frameGrab;
+            if (functionCheck != null && functionCheck.frame != null) frame = functionCheck.frame;
+            WeaponId = chosen.id;
+            menu.Restrict(pick);
+        }
+
+        // The weapon's own version of a sergeant line, where its wording differs (TEC-9: no safety, charging knob,
+        // no bolt hold-open).
+        private VoiceLine Line(VoiceLine line)
+        {
+            if (!IsTec9) return line;
+            switch (line)
+            {
+                case VoiceLine.Rng_Magazine: return VoiceLine.Rng_Tec9_Magazine;
+                case VoiceLine.Rng_Load: return VoiceLine.Rng_Tec9_Load;
+                case VoiceLine.Rng_FireWhenReady: return VoiceLine.Rng_Tec9_FireWhenReady;
+                case VoiceLine.Rng_Reload_B: return VoiceLine.Rng_Tec9_Reload_B;
+                case VoiceLine.Rng_Reload_Y: return VoiceLine.Rng_Tec9_Reload_Y;
+            }
+            return line;
         }
 
         // ---------- Flow ----------
@@ -188,7 +240,7 @@ namespace VRArmory
             else
             {
                 phase = Phase.Load;
-                sergeant.Say(VoiceLine.Rng_Load);
+                sergeant.Say(Line(VoiceLine.Rng_Load));
             }
         }
 
@@ -251,14 +303,14 @@ namespace VRArmory
                     if (ammo.magazine.IsHeld || ammo.MagazineInserted)
                     {
                         phase = Phase.Load;
-                        sergeant.Say(VoiceLine.Rng_Magazine, VoiceLine.Rng_Load);
+                        sergeant.Say(Line(VoiceLine.Rng_Magazine), Line(VoiceLine.Rng_Load));
                     }
                     break;
                 case Phase.Load:
                     if (ammo.Chambered)
                     {
                         phase = Phase.Ready;
-                        if (timedMode) sergeant.Say(VoiceLine.Rng_FireWhenReady); // that line is about the clock
+                        if (timedMode) sergeant.Say(Line(VoiceLine.Rng_FireWhenReady)); // that line is about the clock
                     }
                     break;
             }
@@ -290,7 +342,7 @@ namespace VRArmory
                 reloadHintGiven = true;
                 bool left = frameGrab != null && frameGrab.isSelected && VRHands.Instance != null
                             && VRHands.Instance.IsLeft(frameGrab.interactorsSelecting[0]);
-                sergeant.Say(left ? VoiceLine.Rng_Reload_Y : VoiceLine.Rng_Reload_B);
+                sergeant.Say(Line(left ? VoiceLine.Rng_Reload_Y : VoiceLine.Rng_Reload_B));
             }
         }
 
@@ -354,14 +406,21 @@ namespace VRArmory
 
         private string StepText()
         {
+            string unlimited = IsTec9 ? VRTrainingText.RangeStepUnlimitedTec9 : VRTrainingText.RangeStepUnlimited;
             switch (phase)
             {
                 case Phase.Magazine: return VRTrainingText.RangeStepMagazine;
                 case Phase.Load:
-                    if (!ammo.MagazineInserted) return ammo.magazine.IsHeld ? VRTrainingText.RangeStepInsert : VRTrainingText.RangeStepLoad;
-                    return VRTrainingText.RangeStepRack;
-                case Phase.Ready: return timedMode ? VRTrainingText.RangeStepReady : VRTrainingText.RangeStepUnlimited;
-                case Phase.Firing: return timedMode ? VRTrainingText.RangeStepFiring : VRTrainingText.RangeStepUnlimited;
+                    if (!ammo.MagazineInserted)
+                    {
+                        if (ammo.magazine.IsHeld) return IsTec9 ? VRTrainingText.RangeStepInsertTec9 : VRTrainingText.RangeStepInsert;
+                        return IsTec9 ? VRTrainingText.RangeStepLoadTec9 : VRTrainingText.RangeStepLoad;
+                    }
+                    return IsTec9 ? VRTrainingText.RangeStepRackTec9 : VRTrainingText.RangeStepRack;
+                case Phase.Ready:
+                    if (!timedMode) return unlimited;
+                    return IsTec9 ? VRTrainingText.RangeStepReadyTec9 : VRTrainingText.RangeStepReady;
+                case Phase.Firing: return timedMode ? VRTrainingText.RangeStepFiringFor(ammo.capacity) : unlimited;
                 case Phase.Results: return VRTrainingText.RangeStepDone;
             }
             return "";

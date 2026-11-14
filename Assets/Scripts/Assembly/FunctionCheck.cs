@@ -52,6 +52,8 @@ namespace VRArmory
         public Vector3 UpLocal => upLocal;
         [Tooltip("Live fire: seconds for the slide to fly back and return after a shot.")]
         public float cycleDuration = 0.09f;
+        [Tooltip("Live fire: shortest time from one shot to the next (set by PistolFiring per weapon).")]
+        public float minShotInterval;
 
         [Header("Weapon")]
         [Tooltip("Off: no manual safety. The check starts at the first trigger pull (stage 3), skipping the safety checks.")]
@@ -132,6 +134,7 @@ namespace VRArmory
         private Vector3 upLocal = Vector3.up;
         private Vector3 muzzleTipLocal;
         private bool slideLocked;
+        private float lastCycleAt = -100f;
         private float cycleTime = -1f; // live fire: seconds since the slide started its recoil cycle (-1 = not cycling)
         private bool rigBuilt;
         private AudioSource audioSource;
@@ -242,6 +245,7 @@ namespace VRArmory
             }
 
             if (needsReset || slideLocked) return; // slide open: out of battery, the trigger does nothing
+            if (Time.time - lastCycleAt < Mathf.Max(cycleDuration, minShotInterval)) return; // still cycling from the last shot
             if (hammerCocked && pull >= 0.4f) DropHammer(false);
             else if (doubleAction && !hammerCocked && pull >= 1f && slideAmount < 0.05f) DropHammer(true);
         }
@@ -276,6 +280,7 @@ namespace VRArmory
         public void CycleSlide(bool lockOpen = false)
         {
             cycleTime = 0f;
+            lastCycleAt = Time.time;
             if (lockOpen) slideLocked = true;
             if (!safetyOn) hammerCocked = true;
         }

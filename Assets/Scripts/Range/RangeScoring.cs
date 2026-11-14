@@ -8,7 +8,8 @@ namespace VRArmory
     // rises and fades, sized so it reads from the firing line. Keeps the running total for the fire training.
     public class RangeScoring : MonoBehaviour
     {
-        public PistolFiring firing;
+        [Tooltip("Every weapon's live fire (only the one in use fires).")]
+        public PistolFiring[] firings = new PistolFiring[0];
         public float popupTime = 1.3f;
         [Tooltip("Popup height as a share of its distance from the eye (about 3 degrees).")]
         public float popupAngularSize = 0.05f;
@@ -33,12 +34,14 @@ namespace VRArmory
 
         void OnEnable()
         {
-            if (firing != null) firing.Hit += OnHit;
+            foreach (PistolFiring f in firings)
+                if (f != null) f.Hit += OnHit;
         }
 
         void OnDisable()
         {
-            if (firing != null) firing.Hit -= OnHit;
+            foreach (PistolFiring f in firings)
+                if (f != null) f.Hit -= OnHit;
         }
 
         public void ResetScore()

@@ -11,6 +11,10 @@ namespace VRArmory
     public class RangeWeapon
     {
         public string displayName = "Beretta 92 FS";
+        [Tooltip("WeaponKit.id of the gun (per-weapon wording and voice lines).")]
+        public string id = "beretta92";
+        [Tooltip("This weapon's live fire (its PistolMagazine is firing.ammo).")]
+        public PistolFiring firing;
         public int magazineSize = 15;
         public Transform model;
         public Transform magazineModel;
@@ -60,6 +64,7 @@ namespace VRArmory
         private enum Step { Weapon, Mode, Targets }
         private Step step;
         private int weapon;
+        private int onlyWeapon = -1;
         private readonly System.Collections.Generic.List<GameObject> modelCopies = new System.Collections.Generic.List<GameObject>();
 
         void Start()
@@ -80,6 +85,26 @@ namespace VRArmory
             if (desktopHint != null) desktopHint.gameObject.SetActive(!VRPlatformSwitch.IsVR);
             if (!IsOpen) panel.gameObject.SetActive(false);
         }
+
+        // Only the weapon assembled in this session can go to the range: the other cards are hidden and the one left is
+        // centred. -1 = all.
+        public void Restrict(int index)
+        {
+            onlyWeapon = index >= 0 && index < weapons.Length ? index : -1;
+            for (int i = 0; i < weaponCards.Length; i++)
+            {
+                if (weaponCards[i] == null) continue;
+                bool on = onlyWeapon < 0 || i == onlyWeapon;
+                weaponCards[i].gameObject.SetActive(on);
+                if (on && onlyWeapon >= 0)
+                {
+                    var rt = (RectTransform)weaponCards[i].transform;
+                    rt.anchoredPosition = new Vector2(0f, rt.anchoredPosition.y);
+                }
+            }
+        }
+
+        private bool Available(int index) => index >= 0 && index < weapons.Length && (onlyWeapon < 0 || index == onlyWeapon);
 
         public void Open()
         {
@@ -105,7 +130,10 @@ namespace VRArmory
             {
                 switch (step)
                 {
-                    case Step.Weapon: if (key < weapons.Length) PickWeapon(key); break;
+                    case Step.Weapon:
+                        if (onlyWeapon >= 0) { if (key == 0) PickWeapon(onlyWeapon); }
+                        else if (key < weapons.Length) PickWeapon(key);
+                        break;
                     case Step.Mode: if (key == 0) Finish(false, false); else if (key == 1) Show(Step.Targets); break;
                     case Step.Targets: if (key < 2) Finish(true, key == 1); break;
                 }
@@ -119,7 +147,7 @@ namespace VRArmory
 
         private void PickWeapon(int index)
         {
-            if (!IsOpen || step != Step.Weapon || index >= weapons.Length) return;
+            if (!IsOpen || step != Step.Weapon || !Available(index)) return;
             weapon = index;
             Show(Step.Mode);
         }
@@ -175,7 +203,7 @@ namespace VRArmory
             {
                 RangeWeapon w = weapons[i];
                 Transform spot = modelSpots[i];
-                if (w == null || w.model == null || spot == null) continue;
+                if (w == null || w.model == null || spot == null || !Available(i)) continue;
 
                 Transform root = new GameObject(w.displayName + "_Model").transform;
                 root.SetParent(spot, false);

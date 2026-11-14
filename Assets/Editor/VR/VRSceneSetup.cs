@@ -402,6 +402,9 @@ namespace VRArmory.Editor
                 grab.wrapTrackedHand = false;
             }
             grab.mirrorForRightHand = part.partType == GunPart.Magazine; // leans the holding hand's way, either hand
+            // Open side toward the free hand: it lies facing left (right-hand hold), so a left-hand grab mirrors it.
+            grab.mirrorForLeftHand = part.partType == GunPart.UpperSlide || part.partType == GunPart.UpperReceiver
+                                     || part.partType == GunPart.Barrel || part.partType == GunPart.Bolt;
             grab.trackScale = false;
             grab.retainTransformParent = true;
             grab.addDefaultGrabTransformers = false;

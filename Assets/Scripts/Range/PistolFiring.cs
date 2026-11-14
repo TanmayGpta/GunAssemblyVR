@@ -9,7 +9,7 @@ namespace VRArmory
     //    small random spread, and skips the pistol itself and the player;
     //  - gunshot sound, muzzle flash, tracer, bullet hole + dust where it lands (ShotEffects);
     //  - the slide cycles and re-cocks the hammer; the trigger must be let out to its reset before the next shot
-    //    (semi-automatic, one round per pull);
+    //    (roundsPerPull: 1 = semi-automatic; the TEC-9 fires 2 per pull, the second one bolt cycle later);
     //  - a slight recoil kick (muzzle up, gun back toward the hand) and a strong controller buzz;
     //  - range dummies (RangeTarget) get the hit; loose rigid bodies get a small push.
     // Ammunition: PistolMagazine (chamber + 15-round magazine; without it, unlimited).
@@ -38,6 +38,22 @@ namespace VRArmory
         [Range(0f, 1f)] public float shotHaptic = 1f;
         public float shotHapticTime = 0.1f;
 
+        [Header("Action")]
+        [Tooltip("Seconds the slide / bolt takes to fly back and return after a shot (0 = keep the function check's own). " +
+                 "The trigger does nothing until it is back in battery.")]
+        public float cycleDuration;
+        [Tooltip("Shortest time between two shots, seconds: how fast the trigger can really be worked " +
+                 "(0 = only the trigger reset limits it).")]
+        public float minShotInterval;
+        [Tooltip("Rounds fired by one pull of the trigger (TEC-9: 2). Follow-up rounds come one bolt cycle apart and " +
+                 "need no trigger reset.")]
+        public int roundsPerPull = 1;
+        [Tooltip("Each follow-up round of the same pull kicks this much harder (0.5 = 1.5x) and stacks on the last " +
+                 "kick, so the muzzle climbs.")]
+        public float followUpKickGrowth = 0.5f;
+        [Tooltip("Each follow-up round of the same pull spreads this much wider (1 = twice the cone).")]
+        public float followUpSpreadGrowth = 1f;
+
         [Header("Sound")]
         [Range(0f, 1f)] public float volume = 1f;
 
@@ -47,6 +63,10 @@ namespace VRArmory
 
         private AudioSource audioSource;
         private float sinceShot = 10f;
+        private float kickFrom, kickPeak = 1f; // this shot's kick rises from kickFrom to kickPeak (in full kicks)
+        private int burstIndex;                // 0 = the round fired by the pull, 1.. = its follow-ups
+        private int burstLeft;
+        private float burstTimer;
         private readonly RaycastHit[] hits = new RaycastHit[16];
 
         void Awake()
@@ -63,12 +83,16 @@ namespace VRArmory
 
         void OnEnable()
         {
-            if (functionCheck != null) functionCheck.HammerFell += OnHammerFell;
+            if (functionCheck == null) return;
+            functionCheck.HammerFell += OnHammerFell;
+            if (cycleDuration > 0f) functionCheck.cycleDuration = cycleDuration;
+            functionCheck.minShotInterval = minShotInterval;
         }
 
         void OnDisable()
         {
             if (functionCheck != null) functionCheck.HammerFell -= OnHammerFell;
+            burstLeft = 0;
             SetKick(0f);
         }
 
@@ -79,7 +103,27 @@ namespace VRArmory
             if (!FireTraining.LiveFireAllowed) return; // only in a range session: in the armory the hammer just clicks
             bool lockOpen = false;
             if (ammo != null && !ammo.TakeChamberedRound(out lockOpen)) return; // empty chamber: only the hammer's click
+            burstIndex = 0;
             Fire(lockOpen);
+            burstLeft = Mathf.Max(0, roundsPerPull - 1);
+            burstTimer = BurstGap;
+        }
+
+        private float BurstGap => Mathf.Max(0.05f, functionCheck.cycleDuration);
+
+        // The next round of the same pull, once the bolt is back in battery.
+        private void FireFollowUp()
+        {
+            burstLeft--;
+            bool lockOpen = false;
+            if (!FireTraining.LiveFireAllowed || !functionCheck.Passed || (ammo != null && !ammo.TakeChamberedRound(out lockOpen)))
+            {
+                burstLeft = 0; // stopped, or ran dry mid-pull
+                return;
+            }
+            burstIndex++;
+            Fire(lockOpen);
+            burstTimer = BurstGap;
         }
 
         // lockOpen: the last round, the slide stays back.
@@ -87,7 +131,7 @@ namespace VRArmory
         {
             ShotsFired++;
             Vector3 muzzle = functionCheck.MuzzlePosition;
-            Vector3 dir = Spread(functionCheck.MuzzleDirection);
+            Vector3 dir = Spread(functionCheck.MuzzleDirection, spreadDegrees * (1f + followUpSpreadGrowth * burstIndex));
 
             bool hit = TryHit(muzzle, dir, out RaycastHit h);
             Vector3 end = hit ? h.point : muzzle + dir * range;
@@ -102,6 +146,8 @@ namespace VRArmory
             }
 
             functionCheck.CycleSlide(lockOpen);
+            kickFrom = KickNow();
+            kickPeak = Mathf.Min(3f, kickFrom + 1f + followUpKickGrowth * burstIndex);
             sinceShot = 0f;
             if (frameGrab != null && frameGrab.isSelected)
             {
@@ -121,12 +167,22 @@ namespace VRArmory
 
         void Update()
         {
+            if (burstLeft > 0)
+            {
+                burstTimer -= Time.deltaTime;
+                if (burstTimer <= 0f) FireFollowUp();
+            }
             sinceShot += Time.deltaTime;
-            float k;
-            if (sinceShot < kickRiseTime) k = sinceShot / kickRiseTime;
-            else k = Mathf.Exp(-(sinceShot - kickRiseTime) / kickRecoverTime);
+            float k = KickNow();
             if (k < 0.002f) k = 0f;
             SetKick(k);
+        }
+
+        // Kick right now, in full kicks: quick rise to this shot's peak, then an exponential return.
+        private float KickNow()
+        {
+            if (sinceShot < kickRiseTime) return Mathf.Lerp(kickFrom, kickPeak, sinceShot / kickRiseTime);
+            return kickPeak * Mathf.Exp(-(sinceShot - kickRiseTime) / kickRecoverTime);
         }
 
         // k = 0..1 of the full kick.
@@ -146,10 +202,10 @@ namespace VRArmory
             frameGrab.kickOffsetLocal = -m * (kickBack * k / scale);
         }
 
-        private Vector3 Spread(Vector3 dir)
+        private Vector3 Spread(Vector3 dir, float degrees)
         {
-            if (spreadDegrees <= 0f) return dir;
-            Vector2 r = Random.insideUnitCircle * Mathf.Tan(spreadDegrees * Mathf.Deg2Rad);
+            if (degrees <= 0f) return dir;
+            Vector2 r = Random.insideUnitCircle * Mathf.Tan(degrees * Mathf.Deg2Rad);
             Vector3 side = Vector3.Cross(dir, Mathf.Abs(dir.y) < 0.95f ? Vector3.up : Vector3.right).normalized;
             Vector3 up = Vector3.Cross(side, dir);
             return (dir + side * r.x + up * r.y).normalized;

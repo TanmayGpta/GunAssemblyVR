@@ -21,20 +21,16 @@ namespace VRArmory.Editor
         [MenuItem("Tools/VR Armory/Range/1. Setup Live Firing", priority = 20)]
         public static void SetupLiveFiring()
         {
-            FunctionCheck functionCheck = Object.FindObjectOfType<FunctionCheck>(true);
-            if (functionCheck == null)
+            List<WeaponKit> kits = new List<WeaponKit>();
+            foreach (WeaponKit k in Object.FindObjectsOfType<WeaponKit>(true))
+                if (k.functionCheck != null) kits.Add(k);
+                else Debug.LogWarning($"[VR Armory] Weapon kit '{k.id}' has no function check: no live fire for it.");
+            if (kits.Count == 0)
             {
-                EditorUtility.DisplayDialog("VR Armory", "No FunctionCheck in the open scene. Open SampleScene (with the assembly set up) and try again.", "OK");
+                EditorUtility.DisplayDialog("VR Armory", "No weapon kit with a FunctionCheck in the open scene. Open SampleScene (with the assembly set up) and try again.", "OK");
                 return;
             }
-
-            VRAssemblyGrab frameGrab = null;
-            foreach (VRAssemblyGrab g in Object.FindObjectsOfType<VRAssemblyGrab>(true))
-            {
-                AssemblyPart part = g.GetComponent<AssemblyPart>();
-                if (part != null && part.partType == GunPart.LowerFrame) frameGrab = g;
-            }
-            if (frameGrab == null) Debug.LogWarning("[VR Armory] No VR grab on the pistol frame (run Setup VR Scene first): live fire will work without recoil kick / vibration.");
+            kits.Sort((a, b) => (a.id == BerettaId ? 0 : 1).CompareTo(b.id == BerettaId ? 0 : 1)); // Beretta first
 
             GameObject root = GameObject.Find(RootName);
             if (root == null) root = new GameObject(RootName);
@@ -43,38 +39,97 @@ namespace VRArmory.Editor
             effects.baseMaterial = VRSceneSetup.GetOrCreateGuideMaterial(); // Sprites/Default, saved so it is in the build
             effects.holeSize = 0.022f;
 
-            PistolFiring firing = GetOrAdd<PistolFiring>(root);
-            firing.functionCheck = functionCheck;
-            firing.frameGrab = frameGrab;
-            firing.effects = effects;
-            firing.ammo = SetupMagazine(root, functionCheck, frameGrab);
-            firing.kickAngle = 3f;    // hand + pistol turn together about the wrist
-            firing.kickBack = 0.015f;
-            firing.gunshot = LoadWeaponClip("Gunshot");
-            if (firing.gunshot == null) Debug.LogWarning($"[VR Armory] No Gunshot audio file in {WeaponAudioFolder}: shots will be silent.");
+            // The Beretta's live fire sits on the root (as before), every other weapon's on a child of its own.
+            var firings = new List<PistolFiring>();
+            foreach (WeaponKit kit in kits)
+            {
+                GameObject host = root;
+                if (kit.id != BerettaId)
+                {
+                    string name = kit.id + "_Live_Fire";
+                    Transform child = root.transform.Find(name);
+                    host = child != null ? child.gameObject : new GameObject(name);
+                    host.transform.SetParent(root.transform, false);
+                }
+                firings.Add(SetupFiring(host, kit, effects));
+            }
 
             RangeScoring scoring = GetOrAdd<RangeScoring>(root);
-            scoring.firing = firing;
+            scoring.firings = firings.ToArray();
             EditorUtility.SetDirty(scoring);
 
             PlaceTargets();
 
             EditorUtility.SetDirty(effects);
-            EditorUtility.SetDirty(firing);
             EditorSceneManager.MarkSceneDirty(root.scene);
             EditorSceneManager.SaveScene(root.scene);
-            Debug.Log("[VR Armory] Live firing set up: the pistol fires once its function check has passed (Play mode: Tools > VR Armory > Debug > Skip Assembly).");
+            Debug.Log($"[VR Armory] Live firing set up for {firings.Count} weapon(s): each fires once its function check has passed (Play mode: Tools > VR Armory > Debug > Skip Assembly). Re-run Range > 2. Setup Range Sergeant.");
         }
 
-        // Chamber + magazine: the pistol's magazine part and the socket in its grip.
-        static PistolMagazine SetupMagazine(GameObject root, FunctionCheck functionCheck, VRAssemblyGrab frameGrab)
+        const string BerettaId = "beretta92";
+
+        // One weapon's live fire: firing + magazine on 'host', tuned like the real gun.
+        static PistolFiring SetupFiring(GameObject host, WeaponKit kit, ShotEffects effects)
         {
-            PistolMagazine ammo = GetOrAdd<PistolMagazine>(root);
+            FunctionCheck functionCheck = kit.functionCheck;
+            VRAssemblyGrab frameGrab = kit.frame != null ? kit.frame.GetComponent<VRAssemblyGrab>() : null;
+            if (frameGrab == null) Debug.LogWarning($"[VR Armory] No VR grab on the {kit.displayName} frame (run Setup VR Scene first): live fire will work without recoil kick / vibration.");
+
+            PistolFiring firing = GetOrAdd<PistolFiring>(host);
+            firing.functionCheck = functionCheck;
+            firing.frameGrab = frameGrab;
+            firing.effects = effects;
+            PistolMagazine ammo = SetupMagazine(host, kit, functionCheck, frameGrab);
+            firing.ammo = ammo;
+
+            if (kit.id == VRTrainingText.Tec9Id)
+            {
+                // TEC-9: straight blowback with a heavy bolt and a long, heavy trigger, so the practical rate of fire is
+                // lower (about 5 aimed shots a second at most) and it kicks harder; 32-round magazine; the bolt does not
+                // lock open on the last round, so every reload ends with pulling the charging knob.
+                ammo.capacity = 32;
+                ammo.boltHoldOpen = false;
+                ammo.rackWord = "BOLT";
+                firing.kickAngle = 5f;
+                firing.kickBack = 0.024f;
+                firing.kickRecoverTime = 0.1f;
+                firing.shotHapticTime = 0.12f;
+                firing.cycleDuration = 0.12f;
+                firing.minShotInterval = 0.2f;
+                firing.roundsPerPull = 2; // trainer setting: two rounds per pull (the real gun is semi-automatic)
+            }
+            else
+            {
+                // Beretta 92 FS: 15 rounds, slide locks open on empty.
+                ammo.capacity = 15;
+                ammo.boltHoldOpen = true;
+                ammo.rackWord = "SLIDE";
+                firing.kickAngle = 3f;    // hand + pistol turn together about the wrist
+                firing.kickBack = 0.015f;
+                firing.kickRecoverTime = 0.07f;
+                firing.shotHapticTime = 0.1f;
+                firing.cycleDuration = 0f; // the function check's own
+                firing.minShotInterval = 0f;
+                firing.roundsPerPull = 1;
+            }
+
+            firing.gunshot = LoadWeaponClip("Gunshot_" + kit.id);
+            if (firing.gunshot == null) firing.gunshot = LoadWeaponClip("Gunshot");
+            if (firing.gunshot == null) Debug.LogWarning($"[VR Armory] No Gunshot audio file in {WeaponAudioFolder}: shots will be silent.");
+            EditorUtility.SetDirty(ammo);
+            EditorUtility.SetDirty(firing);
+            return firing;
+        }
+
+        // Chamber + magazine: the weapon's magazine part and the socket that takes it.
+        static PistolMagazine SetupMagazine(GameObject host, WeaponKit kit, FunctionCheck functionCheck, VRAssemblyGrab frameGrab)
+        {
+            PistolMagazine ammo = GetOrAdd<PistolMagazine>(host);
             ammo.functionCheck = functionCheck;
             ammo.frameGrab = frameGrab;
             ammo.magazine = null;
             ammo.magazineWell = null;
-            foreach (AssemblyPart part in Object.FindObjectsOfType<AssemblyPart>(true))
+            foreach (AssemblyPart part in kit.GetComponentsInChildren<AssemblyPart>(true))
             {
                 if (part.partType == GunPart.Magazine) ammo.magazine = part;
             }
@@ -82,8 +137,7 @@ namespace VRArmory.Editor
             {
                 if (ammo.magazine != null && socket.acceptedPart == ammo.magazine) ammo.magazineWell = socket;
             }
-            if (ammo.magazine == null || ammo.magazineWell == null) Debug.LogWarning("[VR Armory] Magazine part or its socket not found: the magazine cannot be released / reloaded.");
-            EditorUtility.SetDirty(ammo);
+            if (ammo.magazine == null || ammo.magazineWell == null) Debug.LogWarning($"[VR Armory] {kit.displayName}: magazine part or its socket not found: the magazine cannot be released / reloaded.");
             return ammo;
         }
 
@@ -224,7 +278,9 @@ namespace VRArmory.Editor
         // The training round: booth points, the panel at the trainee's left, and FireTraining wired to everything.
         static void BuildTraining(Transform root, RangeSergeant sergeant)
         {
-            PistolFiring firing = Object.FindObjectOfType<PistolFiring>(true);
+            GameObject liveFire = GameObject.Find(RootName);
+            RangeScoring scoring = liveFire != null ? liveFire.GetComponent<RangeScoring>() : null;
+            PistolFiring firing = scoring != null && scoring.firings.Length > 0 ? scoring.firings[0] : null; // default: Beretta
             if (firing == null)
             {
                 Debug.LogWarning("[VR Armory] No live firing in the scene: run Range > 1. Setup Live Firing, then this again.");
@@ -263,7 +319,7 @@ namespace VRArmory.Editor
             t.frameGrab = firing.frameGrab;
             t.frame = firing.functionCheck != null ? firing.functionCheck.frame : null;
             t.ammo = firing.ammo;
-            t.scoring = Object.FindObjectOfType<RangeScoring>(true);
+            t.scoring = scoring;
             t.standPoint = stand;
             t.pistolSpot = pistolSpot;
             t.magazineSpot = magSpot;
@@ -287,19 +343,27 @@ namespace VRArmory.Editor
             RangeModeMenu m = booth.gameObject.AddComponent<RangeModeMenu>();
             m.panel = canvas.AddComponent<CanvasGroup>();
 
-            PistolMagazine ammo = t.ammo;
-            m.weapons = new[]
+            // One card per weapon with live fire; at run time only the one assembled in the session is shown.
+            WeaponKit[] kits = Object.FindObjectsOfType<WeaponKit>(true);
+            var weapons = new List<RangeWeapon>();
+            foreach (PistolFiring f in t.scoring != null ? t.scoring.firings : new[] { t.firing })
             {
-                new RangeWeapon
+                if (f == null || f.functionCheck == null) continue;
+                WeaponKit kit = System.Array.Find(kits, k => k.functionCheck == f.functionCheck);
+                PistolMagazine ammo = f.ammo;
+                weapons.Add(new RangeWeapon
                 {
-                    displayName = "Beretta 92 FS",
+                    displayName = kit != null ? kit.displayName : "Beretta 92 FS",
+                    id = kit != null ? kit.id : BerettaId,
+                    firing = f,
                     magazineSize = ammo != null ? ammo.capacity : 15,
-                    model = t.frame != null ? t.frame.transform : null,
+                    model = f.functionCheck.frame != null ? f.functionCheck.frame.transform : null,
                     magazineModel = ammo != null && ammo.magazine != null ? ammo.magazine.transform : null,
                     magazineSeat = ammo != null && ammo.magazineWell != null ? ammo.magazineWell.transform : null,
-                    functionCheck = t.functionCheck,
-                },
-            };
+                    functionCheck = f.functionCheck,
+                });
+            }
+            m.weapons = weapons.ToArray();
 
             // 1. Weapon: one card per weapon, side by side: name, the gun's model under it, magazine size.
             Transform page = MenuPage(p, "Weapon_Page", VRTrainingText.RangeMenuWeaponTitle);

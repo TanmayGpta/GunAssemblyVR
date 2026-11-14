@@ -251,6 +251,13 @@ namespace VRArmory
         public const string RangeStepInsert = "Push the magazine up into the grip.";
         public const string RangeStepReady = "Safety off, then fire when ready. The clock starts with your first shot.";
         public const string RangeStepFiring = "Fire all 15 rounds. Farther targets and the centre rings score more.";
+        public static string RangeStepFiringFor(int rounds) => $"Fire all {rounds} rounds. Farther targets and the centre rings score more.";
+        // TEC-9: magazine well in front of the trigger guard, charging knob, no safety, no bolt hold-open.
+        public const string RangeStepLoadTec9 = "Pick up the pistol, push the magazine into the well in front of the trigger guard, then pull the charging knob back.";
+        public const string RangeStepRackTec9 = "Pull the charging knob all the way back and let go, to load the first round.";
+        public const string RangeStepInsertTec9 = "Push the magazine up into the well in front of the trigger guard.";
+        public const string RangeStepReadyTec9 = "No safety on this pistol. Fire when ready. The clock starts with your first shot.";
+        public const string RangeStepUnlimitedTec9 = "Fire at will. Magazine empty? Drop it (B / Y, desktop M), load the fresh one from the counter, then pull the charging knob back - the bolt does not lock open.";
         public const string RangeStepDone = "CEASE FIRE - magazine empty.";
         public const string RangeEnd = "END TRAINING";
         public const string RangeRetry = "TRY AGAIN";
@@ -367,6 +374,11 @@ namespace VRArmory
                 case VoiceLine.Rng_Declined: return "Come back when you're ready, soldier.";
                 case VoiceLine.Rng_Reload_B: return "Magazine empty! Press B to drop it. Then pick up a fresh, fully loaded magazine from the counter.";
                 case VoiceLine.Rng_Reload_Y: return "Magazine empty! Press Y to drop it. Then pick up a fresh, fully loaded magazine from the counter.";
+                case VoiceLine.Rng_Tec9_Magazine: return "This is the Intratec TEC-9, nine millimetre. Its magazine holds thirty-two rounds. Each pull of the trigger fires two rounds, and it kicks harder than the Beretta, so the second round climbs. Hold it firmly, and bring it back on target after every pull.";
+                case VoiceLine.Rng_Tec9_Load: return "Pick up the pistol. Push the magazine up into the well, in front of the trigger guard. Then pull the charging knob all the way back, and let it go, to load the first round.";
+                case VoiceLine.Rng_Tec9_FireWhenReady: return "This pistol has no safety, so keep your finger off the trigger until you are on target. The clock starts with your first shot. Farther targets, and the centre rings, score more. Fire when ready.";
+                case VoiceLine.Rng_Tec9_Reload_B: return "Magazine empty! The bolt does not lock open on this pistol. Press B to drop the magazine, push in a fresh one from the counter, then pull the charging knob back to load.";
+                case VoiceLine.Rng_Tec9_Reload_Y: return "Magazine empty! The bolt does not lock open on this pistol. Press Y to drop the magazine, push in a fresh one from the counter, then pull the charging knob back to load.";
                 case VoiceLine.Intro_ChooseWeapon: return "Choose the weapon you want to put together. Point at its card, and pull the trigger.";
                 case VoiceLine.Tec9_Pick_Bolt: return "First, pick up the glowing upper receiver with one hand. Then, with your other hand, pick up the bolt.";
                 case VoiceLine.Tec9_Place_Bolt: return "Now bring your hands together, and slide the bolt into the back of the receiver, until it clicks.";

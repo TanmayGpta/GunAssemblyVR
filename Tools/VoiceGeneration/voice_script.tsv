@@ -73,3 +73,8 @@ VO_Tec9_FC_BoltDemo.wav	Tec9_FC_BoltDemo	Now watch the glowing bolt. It moves al
 VO_Tec9_FC_YourTurn_Rack.wav	Tec9_FC_YourTurn_Rack	With your other hand, grab the charging knob on the side. Pull it back, then let go.
 VO_Tec9_FC_HoldWhileRacking.wav	Tec9_FC_HoldWhileRacking	Keep the trigger pulled while you pull the charging knob. Let's try that again.
 VO_Tec9_FC_ReleasedTooEarly.wav	Tec9_FC_ReleasedTooEarly	You let go of the trigger too early. Pull it, hold it, and pull the charging knob again.
+VO_Rng_Tec9_Magazine.wav	Rng_Tec9_Magazine	This is the Intratec TEC-9, nine millimetre. Its magazine holds thirty-two rounds. Each pull of the trigger fires two rounds, and it kicks harder than the Beretta, so the second round climbs. Hold it firmly, and bring it back on target after every pull.
+VO_Rng_Tec9_Load.wav	Rng_Tec9_Load	Pick up the pistol. Push the magazine up into the well, in front of the trigger guard. Then pull the charging knob all the way back, and let it go, to load the first round.
+VO_Rng_Tec9_FireWhenReady.wav	Rng_Tec9_FireWhenReady	This pistol has no safety, so keep your finger off the trigger until you are on target. The clock starts with your first shot. Farther targets, and the centre rings, score more. Fire when ready.
+VO_Rng_Tec9_Reload_B.wav	Rng_Tec9_Reload_B	Magazine empty! The bolt does not lock open on this pistol. Press B to drop the magazine, push in a fresh one from the counter, then pull the charging knob back to load.
+VO_Rng_Tec9_Reload_Y.wav	Rng_Tec9_Reload_Y	Magazine empty! The bolt does not lock open on this pistol. Press Y to drop the magazine, push in a fresh one from the counter, then pull the charging knob back to load.

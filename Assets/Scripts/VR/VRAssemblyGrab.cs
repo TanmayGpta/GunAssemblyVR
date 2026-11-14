@@ -28,6 +28,9 @@ namespace VRArmory
         [Tooltip("Small parts keep the angle they lie at. On: a right-hand grab mirrors that angle (left/right), so the part " +
                  "leans the right hand's way (the magazine, pushed up into the grip with either hand).")]
         public bool mirrorForRightHand;
+        [Tooltip("The other way round: a left-hand grab mirrors the angle, so the open side faces the right hand " +
+                 "(Beretta slide, TEC-9 upper receiver: the free hand fits the next part in, whichever hand holds it).")]
+        public bool mirrorForLeftHand;
 
         public AssemblyPart Part { get; private set; }
 
@@ -110,25 +113,65 @@ namespace VRArmory
         // Before XRI fixes the hold (dynamic attach keeps the part's current rotation): mirror it for the right hand.
         protected override void OnSelectEntering(SelectEnterEventArgs args)
         {
-            if (mirrorForRightHand && interactorsSelecting.Count == 0 && VRHands.Instance != null
-                && !VRHands.Instance.IsLeft(args.interactorObject))
-                transform.rotation = MirroredRotation(transform.rotation);
+            if ((mirrorForRightHand || mirrorForLeftHand) && interactorsSelecting.Count == 0 && VRHands.Instance != null)
+            {
+                bool left = VRHands.Instance.IsLeft(args.interactorObject);
+                if (left ? mirrorForLeftHand : mirrorForRightHand) transform.rotation = MirroredRotation(transform.rotation);
+            }
             base.OnSelectEntering(args);
         }
 
         // The same pose reflected across the trainee's vertical centre plane (normal = camera right). The reflected frame
-        // is left-handed, so the part's thinnest axis (its own mirror-symmetry normal, e.g. a magazine's width) is
-        // flipped back: the shape looks exactly mirrored, and the result is a proper rotation.
+        // is left-handed, so the part's own mirror-symmetry normal (the gun's left-right axis; else its thinnest axis,
+        // e.g. a magazine's width) is flipped back: the shape looks exactly mirrored, and the result is a proper rotation.
         private Quaternion MirroredRotation(Quaternion r)
         {
             Camera cam = Camera.main;
             Vector3 n = cam != null ? Vector3.ProjectOnPlane(cam.transform.right, Vector3.up) : Vector3.right;
             if (n.sqrMagnitude < 1e-6f) return r;
             n.Normalize();
-            Vector3[] axes = { r * Vector3.right, r * Vector3.up, r * Vector3.forward };
-            for (int i = 0; i < 3; i++) axes[i] -= 2f * Vector3.Dot(axes[i], n) * n;
-            axes[ThinnestLocalAxis()] = -axes[ThinnestLocalAxis()];
-            return Quaternion.LookRotation(axes[2], axes[1]);
+            Vector3 s = SymmetryNormalLocal();
+            Vector3[] basis = { Vector3.right, Vector3.up, Vector3.forward };
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 v = basis[i] - 2f * Vector3.Dot(basis[i], s) * s; // the part's own reflection...
+                Vector3 w = r * v;
+                basis[i] = w - 2f * Vector3.Dot(w, n) * n;                  // ...then the trainee's left-right one
+            }
+            return Quaternion.LookRotation(basis[2], basis[1]);
+        }
+
+        // The gun's left-right axis in this part's space, as the part sits once assembled; falls back to the thinnest
+        // local axis without a kit or socket chain.
+        private Vector3 SymmetryNormalLocal()
+        {
+            WeaponKit kit = GetComponentInParent<WeaponKit>();
+            if (mirrorForLeftHand && kit != null && kit.frame != null // the magazine keeps its thinnest axis
+                && SeatedInFrame(Part, kit.frame, 0, out Quaternion inFrame))
+            {
+                Vector3 side = Vector3.Cross(kit.muzzleLocal, kit.upLocal);
+                if (side.sqrMagnitude > 1e-6f) return (Quaternion.Inverse(inFrame) * side).normalized;
+            }
+            Vector3 a = Vector3.zero;
+            a[ThinnestLocalAxis()] = 1f;
+            return a;
+        }
+
+        // The part's rotation relative to the frame once assembled, through its socket and its host's own socket
+        // (barrel / bolt -> slide / receiver -> frame). Uses relative rotations only, so it holds wherever the parts lie.
+        private static bool SeatedInFrame(AssemblyPart part, AssemblyPart frame, int depth, out Quaternion rotation)
+        {
+            rotation = Quaternion.identity;
+            if (part == frame) return true;
+            if (part == null || depth > 4) return false;
+            SnapSocket socket = null;
+            foreach (SnapSocket s in SnapSocket.All)
+                if (s.acceptedPart == part) socket = s;
+            if (socket == null) return false;
+            AssemblyPart host = socket.transform.parent != null ? socket.transform.parent.GetComponentInParent<AssemblyPart>() : null;
+            if (!SeatedInFrame(host, frame, depth + 1, out Quaternion hostInFrame)) return false;
+            rotation = hostInFrame * (Quaternion.Inverse(host.transform.rotation) * socket.transform.rotation);
+            return true;
         }
 
         private int thinAxis = -1;

@@ -5,7 +5,7 @@ using UnityEngine.XR.Interaction.Toolkit;
 
 namespace VRArmory
 {
-    // Ammunition for live fire (Beretta 92 FS: 15-round magazine). Works on the assembled pistol once its function check
+    // Ammunition for live fire (one per weapon: Beretta 92 FS 15 rounds, TEC-9 32 rounds). Works on the assembled pistol once its function check
     // has passed:
     //  - the chamber is loaded by racking the slide with a loaded magazine in (FunctionCheck.SlideRacked); racking with a
     //    round already chambered changes nothing (no round is wasted);
@@ -24,6 +24,11 @@ namespace VRArmory
         public SnapSocket magazineWell;
 
         public int capacity = 15;
+        [Tooltip("The empty magazine holds the slide / bolt open after the last shot (Beretta). Off (TEC-9): it closes " +
+                 "on an empty chamber, so every reload needs a rack.")]
+        public bool boltHoldOpen = true;
+        [Tooltip("What is racked, for the readout: SLIDE or BOLT.")]
+        public string rackWord = "SLIDE";
         [Tooltip("Free practice: a magazine is full every time it is inserted.")]
         public bool refillOnInsert = true;
         [Tooltip("Seconds an empty dropped magazine stays on the floor before it disappears.")]
@@ -31,7 +36,8 @@ namespace VRArmory
         public bool showReadout = true;
         [Range(0f, 1f)] public float releaseHaptic = 0.35f;
 
-        public static PistolMagazine Instance { get; private set; }
+        // The magazine of the weapon the fire training is using.
+        public static PistolMagazine Instance => FireTraining.Instance != null ? FireTraining.Instance.ammo : null;
 
         public int RoundsInMagazine { get; private set; }
         public bool Chambered { get; private set; }
@@ -50,7 +56,6 @@ namespace VRArmory
 
         void Awake()
         {
-            Instance = this;
             leftRelease = new InputAction("Left Magazine Release", InputActionType.Button, "<XRController>{LeftHand}/secondaryButton");
             rightRelease = new InputAction("Right Magazine Release", InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
             audioSource = gameObject.AddComponent<AudioSource>();
@@ -82,7 +87,6 @@ namespace VRArmory
 
         void OnDestroy()
         {
-            if (Instance == this) Instance = null;
             if (magazineWell != null) magazineWell.Seated -= OnWellSeated;
             if (functionCheck != null) functionCheck.SlideRacked -= OnSlideRacked;
             leftRelease.Dispose();
@@ -101,7 +105,7 @@ namespace VRArmory
                 RoundsInMagazine--;
                 Chambered = true;
             }
-            else lockOpen = MagazineInserted; // the empty magazine's follower lifts the slide stop
+            else lockOpen = MagazineInserted && boltHoldOpen; // the empty magazine's follower lifts the slide stop
             Changed?.Invoke();
             return true;
         }
@@ -134,7 +138,7 @@ namespace VRArmory
         public static bool OwnsSecondaryButton(bool left)
         {
             PistolMagazine m = Instance;
-            if (m == null || !m.Live || m.frameGrab == null || !m.frameGrab.isSelected) return false;
+            if (m == null || !m.enabled || !m.Live || m.frameGrab == null || !m.frameGrab.isSelected) return false;
             IXRSelectInteractor hand = m.frameGrab.interactorsSelecting[0];
             VRHands hands = VRHands.Instance;
             if (hands == null || hands.IsTrackedHand(hand, out _)) return false;
@@ -252,8 +256,8 @@ namespace VRArmory
 
             string status, color = "#F5B83D";
             if (!MagazineInserted) status = Chambered ? "NO MAGAZINE - 1 IN CHAMBER" : "INSERT A MAGAZINE";
-            else if (functionCheck.SlideLocked) status = "EMPTY - SLIDE LOCKED";
-            else if (!Chambered) status = RoundsInMagazine > 0 ? "RACK THE SLIDE" : "EMPTY";
+            else if (functionCheck.SlideLocked) status = $"EMPTY - {rackWord} LOCKED";
+            else if (!Chambered) status = RoundsInMagazine > 0 ? $"RACK THE {rackWord}" : "EMPTY";
             else if (functionCheck.SafetyOn) status = "SAFETY ON";
             else
             {

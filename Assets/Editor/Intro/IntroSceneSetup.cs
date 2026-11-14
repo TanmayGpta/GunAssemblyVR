@@ -142,16 +142,13 @@ namespace VRArmory.Editor
         {
             RenderSettings.skybox = null;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.2f, 0.22f, 0.26f);
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.07f;
-            RenderSettings.fogColor = Backdrop;
+            RenderSettings.ambientLight = new Color(0.36f, 0.37f, 0.4f); // a lit room, not a void
+            RenderSettings.fog = false;
 
             Light key = new GameObject("Key_Light").AddComponent<Light>();
             key.type = LightType.Directional;
             key.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
-            key.intensity = 0.45f;
+            key.intensity = 0.5f;
             key.color = new Color(1f, 0.96f, 0.9f);
             key.shadows = LightShadows.None;
 
@@ -174,30 +171,126 @@ namespace VRArmory.Editor
             rim.shadows = LightShadows.None;
         }
 
+        // Briefing room around the trainee (origin, facing +Z): X -RoomHalfW..RoomHalfW, Z RoomBack..RoomFront.
+        const float RoomHalfW = 4.5f, RoomBack = -3.5f, RoomFront = 4.5f, RoomH = 4f;
+
         static void BuildStage()
         {
             Transform stage = new GameObject("Stage").transform;
-            Material floor = Mat("Intro_Floor", "Standard", new Color(0.075f, 0.08f, 0.09f), 0.25f);
-            Material wall = Mat("Intro_Wall", "Standard", new Color(0.06f, 0.065f, 0.075f), 0.1f);
+            Material floor = Mat("Intro_Floor", "Standard", new Color(0.2f, 0.21f, 0.23f), 0.35f);
+            Material joint = Mat("Intro_Floor_Joint", "Standard", new Color(0.11f, 0.115f, 0.125f), 0.1f);
+            Material wall = Mat("Intro_Wall", "Standard", new Color(0.31f, 0.33f, 0.36f), 0.15f);
+            Material lower = Mat("Intro_Wall_Lower", "Standard", new Color(0.13f, 0.14f, 0.16f), 0.3f);
+            Material trim = Mat("Intro_Trim", "Standard", new Color(0.08f, 0.085f, 0.095f), 0.5f);
+            Material ceiling = Mat("Intro_Ceiling", "Standard", new Color(0.22f, 0.23f, 0.25f), 0.05f);
+            Material lamp = Mat("Intro_Lamp", "Unlit/Color", new Color(0.93f, 0.96f, 1f), 0f);
+            Material locker = Mat("Intro_Locker", "Standard", new Color(0.23f, 0.28f, 0.26f), 0.55f);
+            Material board = Mat("Intro_Board", "Standard", new Color(0.05f, 0.06f, 0.07f), 0.6f);
+            Material wood = Mat("Intro_Bench", "Standard", new Color(0.33f, 0.24f, 0.16f), 0.3f);
+            Material exitSign = Mat("Intro_Exit_Sign", "Unlit/Color", new Color(0.2f, 0.85f, 0.4f), 0f);
             Material plinth = Mat("Intro_Platform", "Standard", new Color(0.12f, 0.13f, 0.15f), 0.45f);
             Material accent = Mat("Intro_Accent", "Unlit/Color", Accent, 0f);
 
-            Shape(stage, PrimitiveType.Plane, "Floor", Vector3.zero, new Vector3(2f, 1f, 2f), floor);
-            Shape(stage, PrimitiveType.Cube, "Back_Wall", new Vector3(0f, 2.5f, 4.6f), new Vector3(14f, 5f, 0.2f), wall);
-            Shape(stage, PrimitiveType.Cube, "Wall_Accent_Strip", new Vector3(0f, 0.55f, 4.49f), new Vector3(14f, 0.025f, 0.01f), accent);
+            float w = RoomHalfW * 2f, d = RoomFront - RoomBack, cz = (RoomFront + RoomBack) * 0.5f;
+
+            // Floor: concrete slab with tile joints every 1.5 m.
+            Shape(stage, PrimitiveType.Cube, "Floor", new Vector3(0f, -0.05f, cz), new Vector3(w, 0.1f, d), floor);
+            for (float x = -RoomHalfW + 1.5f; x < RoomHalfW - 0.01f; x += 1.5f)
+                Shape(stage, PrimitiveType.Cube, "Floor_Joint", new Vector3(x, 0.001f, cz), new Vector3(0.015f, 0.002f, d), joint);
+            for (float z = RoomBack + 1.5f; z < RoomFront - 0.01f; z += 1.5f)
+                Shape(stage, PrimitiveType.Cube, "Floor_Joint", new Vector3(0f, 0.001f, z), new Vector3(w, 0.002f, 0.015f), joint);
+
+            // Four walls (the front one, behind the soldier, has no pilasters so the title stays clear).
+            Wall(stage, "Front_Wall", new Vector3(0f, 0f, RoomFront), Vector3.back, w, false, wall, lower, trim, accent);
+            Wall(stage, "Back_Wall", new Vector3(0f, 0f, RoomBack), Vector3.forward, w, true, wall, lower, trim, accent);
+            Wall(stage, "Left_Wall", new Vector3(-RoomHalfW, 0f, cz), Vector3.right, d, true, wall, lower, trim, accent);
+            Wall(stage, "Right_Wall", new Vector3(RoomHalfW, 0f, cz), Vector3.left, d, true, wall, lower, trim, accent);
+
+            // Ceiling with light panels, and two lamps that actually light the room.
+            Shape(stage, PrimitiveType.Cube, "Ceiling", new Vector3(0f, RoomH + 0.05f, cz), new Vector3(w, 0.1f, d), ceiling);
+            foreach (float x in new[] { -2.4f, 0f, 2.4f })
+                foreach (float z in new[] { -2f, 0.6f, 3.1f })
+                {
+                    Shape(stage, PrimitiveType.Cube, "Ceiling_Panel_Frame", new Vector3(x, RoomH - 0.006f, z), new Vector3(1.3f, 0.012f, 0.7f), trim);
+                    Shape(stage, PrimitiveType.Cube, "Ceiling_Panel", new Vector3(x, RoomH - 0.014f, z), new Vector3(1.2f, 0.01f, 0.6f), lamp);
+                }
+            foreach (float z in new[] { -1f, 2.6f })
+            {
+                Light l = new GameObject("Ceiling_Light").AddComponent<Light>();
+                l.transform.SetParent(stage, false);
+                l.type = LightType.Point;
+                l.transform.position = new Vector3(0f, RoomH - 0.4f, z);
+                l.range = 7f;
+                l.intensity = 0.7f;
+                l.color = new Color(0.92f, 0.95f, 1f);
+                l.shadows = LightShadows.None;
+            }
+
+            // Right wall: a row of gear lockers.
+            Transform lockers = new GameObject("Lockers").transform;
+            lockers.SetParent(stage, false);
+            for (int i = 0; i < 6; i++)
+            {
+                float z = -1.2f + i * 0.62f;
+                float x = RoomHalfW - 0.06f - 0.25f;
+                Shape(lockers, PrimitiveType.Cube, "Locker", new Vector3(x, 0.95f, z), new Vector3(0.5f, 1.9f, 0.6f), locker);
+                Shape(lockers, PrimitiveType.Cube, "Locker_Seam", new Vector3(x - 0.251f, 0.95f, z + 0.305f), new Vector3(0.004f, 1.9f, 0.012f), trim);
+                Shape(lockers, PrimitiveType.Cube, "Locker_Handle", new Vector3(x - 0.265f, 1.05f, z + 0.2f), new Vector3(0.025f, 0.14f, 0.02f), trim);
+                for (int v = 0; v < 3; v++)
+                    Shape(lockers, PrimitiveType.Cube, "Locker_Vent", new Vector3(x - 0.251f, 1.65f + v * 0.04f, z), new Vector3(0.004f, 0.012f, 0.32f), trim);
+            }
+
+            // Left wall: briefing board with an accent frame, and a bench under it.
+            float lx = -RoomHalfW + 0.06f;
+            Shape(stage, PrimitiveType.Cube, "Board_Frame", new Vector3(lx + 0.02f, 1.75f, 0.5f), new Vector3(0.03f, 1.1f, 2.1f), accent);
+            Shape(stage, PrimitiveType.Cube, "Board", new Vector3(lx + 0.04f, 1.75f, 0.5f), new Vector3(0.03f, 1.04f, 2.04f), board);
+            Shape(stage, PrimitiveType.Cube, "Bench_Seat", new Vector3(lx + 0.25f, 0.45f, 0.5f), new Vector3(0.4f, 0.05f, 1.8f), wood);
+            foreach (float z in new[] { -0.25f, 1.25f })
+                Shape(stage, PrimitiveType.Cube, "Bench_Leg", new Vector3(lx + 0.25f, 0.21f, z), new Vector3(0.34f, 0.42f, 0.06f), trim);
+
+            // Back wall (behind the trainee): the door out, with an exit sign.
+            float bz = RoomBack + 0.06f;
+            Shape(stage, PrimitiveType.Cube, "Door_Frame", new Vector3(3.3f, 1.12f, bz + 0.02f), new Vector3(1.2f, 2.24f, 0.04f), trim);
+            Shape(stage, PrimitiveType.Cube, "Door", new Vector3(3.3f, 1.07f, bz + 0.04f), new Vector3(1.0f, 2.1f, 0.04f), locker);
+            Shape(stage, PrimitiveType.Cube, "Door_Handle", new Vector3(2.95f, 1.05f, bz + 0.075f), new Vector3(0.14f, 0.025f, 0.03f), trim);
+            Shape(stage, PrimitiveType.Cube, "Exit_Sign", new Vector3(3.3f, 2.45f, bz + 0.04f), new Vector3(0.4f, 0.14f, 0.04f), exitSign);
+
             Shape(stage, PrimitiveType.Cylinder, "Platform", SoldierPos + Vector3.up * 0.015f, new Vector3(1.2f, 0.015f, 1.2f), plinth);
             Shape(stage, PrimitiveType.Cylinder, "Platform_Rim", SoldierPos + Vector3.up * 0.01f, new Vector3(1.27f, 0.01f, 1.27f), accent);
 
-            // Title on the back wall.
+            // Title on the front wall, behind the soldier.
             GameObject title = new GameObject("Wall_Title", typeof(RectTransform));
             title.transform.SetParent(stage, false);
-            title.transform.SetPositionAndRotation(new Vector3(0f, 3.25f, 4.48f), Quaternion.identity);
+            title.transform.SetPositionAndRotation(new Vector3(0f, 3.0f, RoomFront - 0.07f), Quaternion.identity);
             title.transform.localScale = Vector3.one * 0.01f; // 1 canvas unit = 1 cm
             ((RectTransform)title.transform).sizeDelta = new Vector2(800f, 160f);
             title.AddComponent<Canvas>().renderMode = RenderMode.WorldSpace;
             title.AddComponent<CanvasScaler>().dynamicPixelsPerUnit = 4f;
             Label(title.transform, "Brand", VRTrainingText.Brand, 90, new Color(TextPrimary.r, TextPrimary.g, TextPrimary.b, 0.9f), new Vector2(0f, 25f), new Vector2(800f, 110f), TextAnchor.MiddleCenter, FontStyle.Bold);
             Label(title.transform, "Tagline", "WEAPON HANDLING TRAINING", 28, Accent, new Vector2(0f, -50f), new Vector2(800f, 40f), TextAnchor.MiddleCenter, FontStyle.Bold);
+        }
+
+        // One wall: 'face' = the middle of its inner face at floor level, 'inward' = toward the room. Darker lower panel
+        // with a trim rail and an accent line on top, baseboard, crown, and (optionally) pilasters every 2.25 m.
+        static void Wall(Transform parent, string name, Vector3 face, Vector3 inward, float length, bool pilasters,
+                         Material wall, Material lower, Material trim, Material accent)
+        {
+            Transform t = new GameObject(name).transform;
+            t.SetParent(parent, false);
+            t.SetPositionAndRotation(face, Quaternion.LookRotation(-inward)); // local +Z = out of the room, X = along it
+            Shape(t, PrimitiveType.Cube, "Wall", new Vector3(0f, RoomH * 0.5f, 0.1f), new Vector3(length, RoomH, 0.2f), wall);
+            Shape(t, PrimitiveType.Cube, "Lower_Panel", new Vector3(0f, 0.55f, -0.015f), new Vector3(length, 1.1f, 0.03f), lower);
+            Shape(t, PrimitiveType.Cube, "Rail", new Vector3(0f, 1.12f, -0.035f), new Vector3(length, 0.04f, 0.04f), trim);
+            Shape(t, PrimitiveType.Cube, "Accent_Line", new Vector3(0f, 1.15f, -0.05f), new Vector3(length, 0.012f, 0.01f), accent);
+            Shape(t, PrimitiveType.Cube, "Baseboard", new Vector3(0f, 0.06f, -0.04f), new Vector3(length, 0.12f, 0.02f), trim);
+            Shape(t, PrimitiveType.Cube, "Crown", new Vector3(0f, RoomH - 0.04f, -0.03f), new Vector3(length, 0.08f, 0.06f), trim);
+            if (!pilasters) return;
+            int n = Mathf.FloorToInt(length / 2.25f);
+            for (int i = 1; i < n; i++)
+            {
+                float x = -length * 0.5f + i * (length / n);
+                Shape(t, PrimitiveType.Cube, "Pilaster", new Vector3(x, RoomH * 0.5f, -0.05f), new Vector3(0.22f, RoomH, 0.1f), lower);
+            }
         }
 
         static GameObject Shape(Transform parent, PrimitiveType type, string name, Vector3 pos, Vector3 scale, Material m)
