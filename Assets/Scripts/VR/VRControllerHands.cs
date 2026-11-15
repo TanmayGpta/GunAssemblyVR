@@ -52,6 +52,9 @@ namespace VRArmory
         public Vector3 wrapMaxCurl = new Vector3(90f, 100f, 70f);
         [Tooltip("Finger thickness (m) used for the touch test.")]
         public float fingerRadius = 0.009f;
+        [Tooltip("Index finger skin thickness (m) from its bone line, used against the trigger's real surface: the pull " +
+                 "bend stops when the finger skin meets the trigger. Raise if it still sinks in slightly, lower if it stops short.")]
+        public float pullContactRadius = 0.005f;
         [Tooltip("Bend step (deg) of the touch search. Smaller = tighter fit, more work.")]
         public float wrapStep = 3f;
         [Range(0f, 1f), Tooltip("Ring and little finger wrap at least this fraction of the finger above them, so none sticks out.")]
@@ -133,6 +136,7 @@ namespace VRArmory
             public Vector3[] debugPath;
             public readonly List<Box> gripBoxes = new List<Box>();    // Grip_* pieces: fingers and thumb wrap these
             public readonly List<Box> indexBoxes = new List<Box>();   // grip + Trigger*: the index rests on these
+            public readonly List<Solid> triggerSolids = new List<Solid>(); // Trigger* surfaces: the pull bend stops at these
             public readonly List<Vector3> gripPoints = new List<Vector3>(); // grip surface vertices in grip-attach space
             public readonly Dictionary<IXRInteractor, Transform> originalAttach = new Dictionary<IXRInteractor, Transform>();
         }
@@ -268,6 +272,7 @@ namespace VRArmory
                     s.pistol = null;
                     s.gripBoxes.Clear();
                     s.indexBoxes.Clear();
+                    s.triggerSolids.Clear();
                 }
             }
         }
@@ -277,6 +282,7 @@ namespace VRArmory
             s.pistol = grab;
             s.gripBoxes.Clear();
             s.indexBoxes.Clear();
+            s.triggerSolids.Clear();
             s.gripPoints.Clear();
             Transform g = grab.attachTransform;
             foreach (MeshFilter mf in grab.GetComponentsInChildren<MeshFilter>(true))
@@ -289,7 +295,11 @@ namespace VRArmory
                 Box box = FitBox(mesh);
                 box.t = mf.transform;
                 s.indexBoxes.Add(box);
-                if (!isGrip) continue;
+                if (!isGrip)
+                {
+                    if (mesh.isReadable) s.triggerSolids.Add(MakeSolid(mf.transform, mesh));
+                    continue;
+                }
                 s.gripBoxes.Add(box);
                 // Real grip surface points in grip space, for the thumb path (sampled down to a few thousand).
                 if (g != null && mesh.isReadable)
@@ -433,7 +443,8 @@ namespace VRArmory
                 {
                     Vector3 rest = Solve(s.index, relaxedCurl, indexPullCurl, s.indexBoxes);
                     s.index.held = Vector3.Lerp(s.index.held, rest, k);
-                    Pose(s.index, s.index.held + indexPullExtra * s.trigger);
+                    // Rest pose as before; the pull bend stops where the finger reaches the trigger instead of sinking in.
+                    Pose(s.index, Vector3.Max(Vector3.zero, s.index.held + indexPullExtra * PullRoom(s.index, s.index.held, s.trigger, s.triggerSolids)));
                 }
                 else
                 {
@@ -681,6 +692,143 @@ namespace VRArmory
             for (int sample = 1; sample <= 4; sample++)
                 if (Touches(Vector3.Lerp(a, b, sample * 0.25f), boxes)) return true;
             return false;
+        }
+
+        // ---------- Trigger as a solid surface (real triangles, not a fitted box) ----------
+
+        public sealed class Solid
+        {
+            public Transform t;
+            public Vector3[] local;   // mesh vertices
+            public int[] tris;
+            public Vector3[] world;   // vertices in world space, refreshed each PullRoom (the trigger can move)
+            public Bounds bounds;     // world bounds of 'world', grown by the finger thickness
+        }
+
+        static readonly Dictionary<Mesh, (Vector3[] v, int[] t)> SolidCache = new Dictionary<Mesh, (Vector3[], int[])>();
+
+        static Solid MakeSolid(Transform t, Mesh mesh)
+        {
+            if (!SolidCache.TryGetValue(mesh, out var data)) SolidCache[mesh] = data = (mesh.vertices, mesh.triangles);
+            return new Solid { t = t, local = data.v, tris = data.t, world = new Vector3[data.v.Length] };
+        }
+
+        const int PullSweepSteps = 16;
+        bool[] pullFree = new bool[0];
+
+        // How much of the trigger pull (0..pull) the index can bend by before its surface reaches the trigger's surface.
+        // Swept in small steps from the rest pose so the thin trigger blade cannot be skipped, then refined.
+        // If the trigger springs forward into the resting finger (release), the result goes negative: the finger is
+        // pushed open until clear. Only segments that touch the trigger even with the finger straight are left out.
+        float PullRoom(Finger f, Vector3 rest, float pull, List<Solid> solids)
+        {
+            if (f == null || solids.Count == 0) return pull;
+            pull = Mathf.Max(0f, pull);
+            float r = Mathf.Max(0.0005f, pullContactRadius);
+            foreach (Solid s in solids)
+            {
+                if (s.t == null) continue;
+                Matrix4x4 m = s.t.localToWorldMatrix;
+                for (int i = 0; i < s.local.Length; i++) s.world[i] = m.MultiplyPoint3x4(s.local[i]);
+                var b = new Bounds(s.world.Length > 0 ? s.world[0] : s.t.position, Vector3.zero);
+                for (int i = 1; i < s.world.Length; i++) b.Encapsulate(s.world[i]);
+                b.Expand(2f * r);
+                s.bounds = b;
+            }
+            int n = f.bones.Length;
+            if (pullFree.Length != n) pullFree = new bool[n];
+            Pose(f, Vector3.zero);
+            for (int i = 0; i < n; i++) pullFree[i] = !SegmentOnSolid(f, i, solids, r);
+
+            if (PullHits(f, rest, solids, r))
+            {
+                // Trigger is over the resting finger: open it (down to straight) until clear.
+                float inside = 0f;
+                for (int k = 1; k <= PullSweepSteps; k++)
+                {
+                    float t = -(float)k / PullSweepSteps;
+                    if (PullHits(f, rest + indexPullExtra * t, solids, r)) { inside = t; continue; }
+                    float lo = t, hi = inside;   // lo clear, hi touching
+                    for (int i = 0; i < 6; i++)
+                    {
+                        float mid = (lo + hi) * 0.5f;
+                        if (PullHits(f, rest + indexPullExtra * mid, solids, r)) hi = mid; else lo = mid;
+                    }
+                    return lo;
+                }
+                return -1f;
+            }
+            if (pull <= 0f) return 0f;
+
+            float prev = 0f;
+            for (int k = 1; k <= PullSweepSteps; k++)
+            {
+                float t = pull * k / PullSweepSteps;
+                if (!PullHits(f, rest + indexPullExtra * t, solids, r)) { prev = t; continue; }
+                float lo = prev, hi = t;
+                for (int i = 0; i < 6; i++)
+                {
+                    float mid = (lo + hi) * 0.5f;
+                    if (PullHits(f, rest + indexPullExtra * mid, solids, r)) hi = mid; else lo = mid;
+                }
+                return lo;
+            }
+            return pull;
+        }
+
+        bool PullHits(Finger f, Vector3 curl, List<Solid> solids, float r)
+        {
+            Pose(f, curl);
+            for (int i = 0; i < pullFree.Length; i++)
+                if (pullFree[i] && SegmentOnSolid(f, i, solids, r)) return true;
+            return false;
+        }
+
+        static bool SegmentOnSolid(Finger f, int i, List<Solid> solids, float r)
+        {
+            int n = f.bones.Length;
+            Vector3 a = f.bones[i].position;
+            Vector3 b = i + 1 < n ? f.bones[i + 1].position : TipPosition(f);
+            for (int sample = 0; sample <= 6; sample++)
+                if (OnSolid(Vector3.Lerp(a, b, sample / 6f), solids, r)) return true;
+            return false;
+        }
+
+        static bool OnSolid(Vector3 p, List<Solid> solids, float r)
+        {
+            float r2 = r * r;
+            foreach (Solid s in solids)
+            {
+                if (s.t == null || !s.bounds.Contains(p)) continue;
+                Vector3[] w = s.world;
+                int[] t = s.tris;
+                for (int i = 0; i + 2 < t.Length; i += 3)
+                    if ((ClosestOnTriangle(p, w[t[i]], w[t[i + 1]], w[t[i + 2]]) - p).sqrMagnitude < r2) return true;
+            }
+            return false;
+        }
+
+        // Closest point to p on triangle abc (Ericson, Real-Time Collision Detection 5.1.5).
+        static Vector3 ClosestOnTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector3 ab = b - a, ac = c - a, ap = p - a;
+            float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+            if (d1 <= 0f && d2 <= 0f) return a;
+            Vector3 bp = p - b;
+            float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+            if (d3 >= 0f && d4 <= d3) return b;
+            float vc = d1 * d4 - d3 * d2;
+            if (vc <= 0f && d1 >= 0f && d3 <= 0f) return a + ab * (d1 / (d1 - d3));
+            Vector3 cp = p - c;
+            float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+            if (d6 >= 0f && d5 <= d6) return c;
+            float vb = d5 * d2 - d1 * d6;
+            if (vb <= 0f && d2 >= 0f && d6 <= 0f) return a + ac * (d2 / (d2 - d6));
+            float va = d3 * d6 - d5 * d4;
+            if (va <= 0f && d4 - d3 >= 0f && d5 - d6 >= 0f) return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+            float denom = 1f / (va + vb + vc);
+            float v = vb * denom, w2 = vc * denom;
+            return a + ab * v + ac * w2;
         }
 
         // First segment from j outwards that is not already touching in the current pose.

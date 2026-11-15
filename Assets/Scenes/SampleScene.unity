@@ -7038,7 +7038,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 54
     m_Alignment: 3
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -21749,7 +21749,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 54
     m_Alignment: 3
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -29414,11 +29414,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 1724235101}
-  snapDistance: 0.06
+  snapDistance: 0.03
   snapAngle: 20
   hintRange: 0.35
   snapDuration: 0.25
-  symmetryAxis: {x: 0, y: 0, z: 0}
+  symmetryAxis: {x: 1, y: 0, z: 0}
   ghostTemplate: {fileID: 2100000, guid: f48c326c0a2b01841b05ece8504dc68b, type: 2}
   insertionDirection: {x: 1, y: 0, z: 0}
   insertionPathLength: 0.12
@@ -43374,11 +43374,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 36332359}
-  snapDistance: 0.06
+  snapDistance: 0.03
   snapAngle: 20
   hintRange: 0.35
   snapDuration: 0.25
-  symmetryAxis: {x: 0, y: 0, z: 0}
+  symmetryAxis: {x: 1, y: 0, z: 0}
   ghostTemplate: {fileID: 2100000, guid: f48c326c0a2b01841b05ece8504dc68b, type: 2}
   insertionDirection: {x: 0.00000011835232, y: 0.000059103324, z: -1.0000001}
   insertionPathLength: 0.12
@@ -47968,7 +47968,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 54
     m_Alignment: 3
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -49604,7 +49604,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 54
     m_Alignment: 3
     m_AlignByGeometry: 0
     m_RichText: 1

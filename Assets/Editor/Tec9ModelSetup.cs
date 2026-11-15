@@ -277,6 +277,13 @@ namespace VRArmory.Editor
                     socket.snapAngle = PinSnapAngle;
                     socket.snapDistance = PinSnapDistance;
                 }
+                // Round spring unit along the muzzle axis: any turn about its length, either end first, fits.
+                // Snaps only when brought closer than the big parts.
+                if (s.part == "04_Recoil_Spring")
+                {
+                    socket.symmetryAxis = socketT.InverseTransformDirection(muzzle).normalized;
+                    socket.snapDistance = SpringSymmetryApply.SpringSnapDistance;
+                }
                 made[s.socket] = socket;
             }
 

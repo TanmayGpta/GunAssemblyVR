@@ -253,6 +253,13 @@ namespace VRArmory.Editor
                 {
                     Vector3 from = spec.from == InsertFrom.Front ? Vector3.forward : -up;
                     socketT.GetComponent<SnapSocket>().insertionDirection = socketT.InverseTransformDirection(from);
+                    // Round spring along the muzzle axis: any turn about its length, either end first, fits.
+                    // Snaps only when brought closer than the big parts.
+                    if (spec.part == "04_Recoil_Spring")
+                    {
+                        socketT.GetComponent<SnapSocket>().symmetryAxis = socketT.InverseTransformDirection(Vector3.forward).normalized;
+                        socketT.GetComponent<SnapSocket>().snapDistance = SpringSymmetryApply.SpringSnapDistance;
+                    }
                     EditorUtility.SetDirty(socketT.GetComponent<SnapSocket>());
                 }
             }
