@@ -146,7 +146,7 @@ namespace VRArmory
         private Vector3 SymmetryNormalLocal()
         {
             WeaponKit kit = GetComponentInParent<WeaponKit>();
-            if (mirrorForLeftHand && kit != null && kit.frame != null // the magazine keeps its thinnest axis
+            if (Part.partType != GunPart.Magazine && kit != null && kit.frame != null // the magazine keeps its thinnest axis
                 && SeatedInFrame(Part, kit.frame, 0, out Quaternion inFrame))
             {
                 Vector3 side = Vector3.Cross(kit.muzzleLocal, kit.upLocal);

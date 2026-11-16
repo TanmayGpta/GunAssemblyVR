@@ -14,9 +14,9 @@ namespace VRArmory
 
         [Header("Fit")]
         public AssemblyPart acceptedPart;
-        public float snapDistance = 0.06f;
-        public float snapAngle = 20f;
-        public float hintRange = 0.35f;
+        public float snapDistance = 0.10f;
+        public float snapAngle = 30f;
+        public float hintRange = 0.40f;
         public float snapDuration = 0.25f;
         [Tooltip("Socket-local axis the part is round about (a pin): turned about it, or end over end, it still fits. " +
                  "Zero = the part must match the seat's rotation exactly.")]

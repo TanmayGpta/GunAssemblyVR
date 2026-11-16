@@ -1260,7 +1260,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.045017377, y: 0.004481046, z: 0.004481053}
+  m_Size: {x: 0.045017377, y: 0.02054, z: 0.02054}
   m_Center: {x: -0.00087269023, y: -0.0000016056001, z: -0.0000015986152}
 --- !u!114 &36332359
 MonoBehaviour:
@@ -2355,8 +2355,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 2099845263}
-  snapDistance: 0.06
-  snapAngle: 20
+  snapDistance: 0.1
+  snapAngle: 30
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 0, y: 0, z: 0}
@@ -4283,7 +4283,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.0604826, y: 0.010401558, z: 0.012740518}
+  m_Size: {x: 0.0604826, y: 0.02054, z: 0.02054}
   m_Center: {x: -0.0034120232, y: -0.00002309028, z: -0.0017805663}
 --- !u!114 &128557463
 MonoBehaviour:
@@ -4483,8 +4483,8 @@ MonoBehaviour:
   rejectedHaptic: 0.8
   wrapTrackedHand: 0
   snapVolume: {fileID: 0}
-  mirrorForRightHand: 0
-  mirrorForLeftHand: 1
+  mirrorForRightHand: 1
+  mirrorForLeftHand: 0
 --- !u!1 &134389565
 GameObject:
   m_ObjectHideFlags: 0
@@ -11752,8 +11752,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 658540451}
-  snapDistance: 0.06
-  snapAngle: 20
+  snapDistance: 0.1
+  snapAngle: 30
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 0, y: 0, z: 0}
@@ -18994,7 +18994,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.0345692, y: 0.012683492, z: 0.061768763}
+  m_Size: {x: 0.0345692, y: 0.02054, z: 0.061768763}
   m_Center: {x: 0.009252842, y: 0.000007714611, z: -0.0013830028}
 --- !u!114 &658540451
 MonoBehaviour:
@@ -19478,8 +19478,8 @@ MonoBehaviour:
   rejectedHaptic: 0.8
   wrapTrackedHand: 0
   snapVolume: {fileID: 0}
-  mirrorForRightHand: 0
-  mirrorForLeftHand: 1
+  mirrorForRightHand: 1
+  mirrorForLeftHand: 0
 --- !u!114 &665720848
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -29414,8 +29414,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 1724235101}
-  snapDistance: 0.03
-  snapAngle: 20
+  snapDistance: 0.07
+  snapAngle: 30
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 1, y: 0, z: 0}
@@ -29972,8 +29972,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 1177266215}
-  snapDistance: 0.07
-  snapAngle: 30
+  snapDistance: 0.1
+  snapAngle: 35
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 0, y: 1, z: 0}
@@ -34702,7 +34702,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.029998597, y: 0.03474552, z: 0.029998597}
+  m_Size: {x: 0.045, y: 0.045, z: 0.045}
   m_Center: {x: 0.0000000037252903, y: 0, z: 0}
 --- !u!114 &1177266215
 MonoBehaviour:
@@ -43374,8 +43374,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 36332359}
-  snapDistance: 0.03
-  snapAngle: 20
+  snapDistance: 0.07
+  snapAngle: 30
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 1, y: 0, z: 0}
@@ -46487,7 +46487,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.036505125, y: 0.029998597, z: 0.21832651}
+  m_Size: {x: 0.045, y: 0.045, z: 0.21832651}
   m_Center: {x: -0.000000007450581, y: 0, z: 0.000000007450581}
 --- !u!114 &1618640502
 MonoBehaviour:
@@ -47577,8 +47577,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 1081109689}
-  snapDistance: 0.06
-  snapAngle: 20
+  snapDistance: 0.1
+  snapAngle: 30
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 0, y: 0, z: 0}
@@ -49889,7 +49889,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.13912423, y: 0.039073937, z: 0.03899194}
+  m_Size: {x: 0.13912423, y: 0.045, z: 0.045}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &1724235101
 MonoBehaviour:
@@ -58114,8 +58114,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 665720851}
-  snapDistance: 0.06
-  snapAngle: 20
+  snapDistance: 0.1
+  snapAngle: 30
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 0, y: 0, z: 0}
@@ -61152,8 +61152,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 1618640502}
-  snapDistance: 0.06
-  snapAngle: 20
+  snapDistance: 0.1
+  snapAngle: 30
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 0, y: 0, z: 0}
@@ -61687,8 +61687,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   acceptedPart: {fileID: 128557463}
-  snapDistance: 0.06
-  snapAngle: 20
+  snapDistance: 0.1
+  snapAngle: 30
   hintRange: 0.35
   snapDuration: 0.25
   symmetryAxis: {x: 0, y: 0, z: 0}

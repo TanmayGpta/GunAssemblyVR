@@ -136,10 +136,10 @@ namespace VRArmory.Editor
         // World scale of the Beretta's VR_Grip_Attach: VRControllerHands' thumb values are in that attach's units.
         const float BerettaGripScale = 2.1903f;
         const float MatMargin = 0.08f;
-        const float MinColliderSize = 0.03f;      // m, so the small pin is easy to grab
+        const float MinColliderSize = 0.045f;     // m, so the small pin is easy to grab
         const float BoltTravel = 0.05f;           // m, how far the bolt moves back when racked
-        const float PinSnapAngle = 30f;           // deg (other sockets: 20), on the pin's axis only
-        const float PinSnapDistance = 0.07f;      // m (other sockets: 0.06)
+        const float PinSnapAngle = 35f;           // deg (other sockets: 30), on the pin's axis only
+        const float PinSnapDistance = 0.10f;      // m (other sockets: 0.10)
 
         // World point of the charging knob: the bolt vertices furthest out sideways from the receiver's centre line.
         static Vector3 KnobPoint(Transform bolt, Vector3 receiverCentre, Vector3 lateral)

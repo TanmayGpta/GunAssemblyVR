@@ -19,7 +19,7 @@ namespace VRArmory
     public class VRPlacementAssist : XRBaseGrabTransformer
     {
         [Tooltip("The pull starts at this distance from the seat, in metres.")]
-        public float assistRadius = 0.15f;
+        public float assistRadius = 0.20f;
         [Tooltip("Rotation is only helped when it is already within this angle of the seat.")]
         public float rotationAssistAngle = 45f;
         [Tooltip("How long the part must stay aligned before it clicks in (no need to let go of the grip).")]

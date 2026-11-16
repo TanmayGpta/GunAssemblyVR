@@ -8,8 +8,8 @@ namespace VRArmory
     // first) without re-staging. Only SnapSocket.symmetryAxis is set; nothing is moved or rebuilt.
     public static class SpringSymmetryApply
     {
-        // Recoil springs snap only this close to the ghost (other parts: SnapSocket default 0.06).
-        public const float SpringSnapDistance = 0.03f;
+        // Recoil springs snap only this close to the ghost (other parts: SnapSocket default 0.10).
+        public const float SpringSnapDistance = 0.07f;
 
         [MenuItem("Tools/VR Armory/Apply Spring Symmetry")]
         static void Apply()

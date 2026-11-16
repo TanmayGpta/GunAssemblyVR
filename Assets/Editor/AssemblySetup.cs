@@ -424,6 +424,8 @@ namespace VRArmory.Editor
             return b;
         }
 
+        internal const float MinPartColliderSize = 0.045f; // m in world space, so thin parts (barrel, spring) are easy to grab
+
         // BoxCollider on the module root from all 8 corners of every child mesh (rotation-safe).
         internal static void FitCollider(Transform m)
         {
@@ -445,7 +447,8 @@ namespace VRArmory.Editor
             col.enabled = true;
             col.isTrigger = false;
             col.center = local.center;
-            col.size = local.size;
+            float min = MinPartColliderSize / Mathf.Max(1e-6f, m.lossyScale.x);
+            col.size = Vector3.Max(local.size, Vector3.one * min);
         }
 
         // Edit-mode check that the player camera's ray actually reaches each part's collider.
