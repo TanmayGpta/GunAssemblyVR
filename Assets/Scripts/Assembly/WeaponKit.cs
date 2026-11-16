@@ -62,7 +62,6 @@ namespace VRArmory
             foreach (AssemblyPart part in GetComponentsInChildren<AssemblyPart>(true))
             {
                 if (!AssembledPose(part, socketOf, 0, out Matrix4x4 pose)) continue;
-                Matrix4x4 toPart = part.transform.worldToLocalMatrix;
                 foreach (MeshRenderer r in part.GetComponentsInChildren<MeshRenderer>(true))
                 {
                     // Own meshes only: not a part already seated inside this one, not a socket's ghost, nothing hidden.
@@ -72,7 +71,7 @@ namespace VRArmory
                     MeshFilter mf = r.GetComponent<MeshFilter>();
                     if (mf == null || mf.sharedMesh == null) continue;
 
-                    Matrix4x4 m = pose * toPart * r.transform.localToWorldMatrix;
+                    Matrix4x4 m = pose * RelativeMatrix(part.transform, r.transform);
                     var go = new GameObject(r.name);
                     go.transform.SetParent(content, false);
                     go.transform.localPosition = m.GetColumn(3);
@@ -112,8 +111,17 @@ namespace VRArmory
             if (depth > 8 || !socketOf.TryGetValue(part, out SnapSocket socket)) return false;
             AssemblyPart host = socket.GetComponentInParent<AssemblyPart>(true);
             if (host == null || !AssembledPose(host, socketOf, depth + 1, out Matrix4x4 hostPose)) return false;
-            pose = hostPose * host.transform.worldToLocalMatrix * socket.transform.localToWorldMatrix;
+            pose = hostPose * RelativeMatrix(host.transform, socket.transform);
             return true;
+        }
+
+        private static Matrix4x4 RelativeMatrix(Transform root, Transform target)
+        {
+            if (target == null || target == root) return Matrix4x4.identity;
+            Transform parent = target.parent;
+            Matrix4x4 local = Matrix4x4.TRS(target.localPosition, target.localRotation, target.localScale);
+            if (parent == null || parent == root) return local;
+            return RelativeMatrix(root, parent) * local;
         }
 
         private static bool ActiveUnder(Transform t, Transform root)

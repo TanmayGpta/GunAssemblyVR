@@ -45,8 +45,8 @@ namespace VRArmory
         [Tooltip("Width the progress segments share, canvas units.")]
         public float progressWidth = 704f;
         public Button restartButton;
-        [Tooltip("Training screen: back to the weapon cards.")]
-        public Button changeWeaponButton;
+        [Tooltip("Training screen: back to the modules.")]
+        public Button exitButton;
 
         [Header("Weapon choice (between the modules and the briefing)")]
         public GameObject weaponPanel;
@@ -65,6 +65,8 @@ namespace VRArmory
         [Header("Complete")]
         public Text resultText;
         public Button trainAgainButton;
+        [Tooltip("Complete screen: choose another weapon.")]
+        public Button changeWeaponButton;
         public Button modulesButton;
 
         [Header("Colours")]
@@ -121,10 +123,16 @@ namespace VRArmory
                 int index = i;
                 if (weaponCards[i] != null) weaponCards[i].onClick.AddListener(() => PickWeapon(index));
             }
-            // Back from the cards: to the training in progress if there is one, otherwise to the modules.
+            // Back from the cards: to the results if complete, else training in progress, else modules.
             if (weaponBackButton != null)
-                weaponBackButton.onClick.AddListener(() => Show(manager.HasStarted && !manager.IsComplete ? progressPanel : modulesPanel));
-            if (changeWeaponButton != null) changeWeaponButton.onClick.AddListener(() => Show(weaponPanel));
+                weaponBackButton.onClick.AddListener(() =>
+                {
+                    WeaponKit activeKit = WeaponKitSwitch.Instance != null ? WeaponKitSwitch.Instance.Active : null;
+                    if (activeKit != null && !activeKit.gameObject.activeSelf) activeKit.gameObject.SetActive(true);
+                    Show(manager.IsComplete ? completePanel : manager.HasStarted ? progressPanel : modulesPanel);
+                });
+            if (exitButton != null) exitButton.onClick.AddListener(OnExitTraining);
+            if (changeWeaponButton != null) changeWeaponButton.onClick.AddListener(OnChangeWeapon);
             restartButton.onClick.AddListener(Restart);
             trainAgainButton.onClick.AddListener(Restart);
             modulesButton.onClick.AddListener(() => Show(modulesPanel));
@@ -230,11 +238,13 @@ namespace VRArmory
             bool onBench = kits == null || kits.Active == kit;
             if (onBench && !manager.HasStarted)
             {
+                if (kit != null && !kit.gameObject.activeSelf) kit.gameObject.SetActive(true);
                 Show(introPanel);
                 return;
             }
             if (onBench && !manager.IsComplete)
             {
+                if (kit != null && !kit.gameObject.activeSelf) kit.gameObject.SetActive(true);
                 Show(progressPanel);
                 return;
             }
@@ -299,8 +309,60 @@ namespace VRArmory
             }
         }
 
+        public static void ForceReleaseAllGrabs()
+        {
+            foreach (VRAssemblyGrab grab in FindObjectsOfType<VRAssemblyGrab>(true))
+            {
+                if (grab != null && grab.isSelected && grab.interactionManager != null)
+                {
+                    for (int i = grab.interactorsSelecting.Count - 1; i >= 0; i--)
+                    {
+                        grab.interactionManager.SelectExit(grab.interactorsSelecting[i], grab);
+                    }
+                }
+            }
+
+            for (int i = AssemblyPart.HeldParts.Count - 1; i >= 0; i--)
+            {
+                if (AssemblyPart.HeldParts[i] != null) AssemblyPart.HeldParts[i].DropToTable();
+            }
+        }
+
+        private void OnExitTraining()
+        {
+            ForceReleaseAllGrabs();
+            startTrainingAfterReload = false;
+            showBriefingAfterReload = false;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
+        private void OnChangeWeapon()
+        {
+            WeaponKit activeKit = WeaponKitSwitch.Instance != null ? WeaponKitSwitch.Instance.Active : null;
+            bool wasHolding = AssemblyPart.HeldParts.Count > 0;
+            if (!wasHolding && activeKit != null)
+            {
+                foreach (VRAssemblyGrab g in activeKit.GetComponentsInChildren<VRAssemblyGrab>(true))
+                {
+                    if (g != null && g.isSelected) { wasHolding = true; break; }
+                }
+            }
+
+            ForceReleaseAllGrabs();
+
+            if (wasHolding && activeKit != null) activeKit.gameObject.SetActive(false);
+
+            Show(weaponPanel);
+        }
+
         private void Show(GameObject panel)
         {
+            if (panel == introPanel || panel == progressPanel)
+            {
+                WeaponKit activeKit = WeaponKitSwitch.Instance != null ? WeaponKitSwitch.Instance.Active : null;
+                if (activeKit != null && !activeKit.gameObject.activeSelf) activeKit.gameObject.SetActive(true);
+            }
+
             foreach (GameObject p in new[] { modulesPanel, comingSoonPanel, weaponPanel, introPanel, progressPanel, completePanel })
                 if (p != null) p.SetActive(p == panel);
             shownPanel = panel;

@@ -50,6 +50,7 @@ namespace VRArmory
         // ---------- Training ----------
         public const string Restart = "Restart";
         public const string Repeat = "Hear again";
+        public const string Exit = "Exit";
         public static string StepLabel(int index, int count, string name) => $"STEP {index + 1} OF {count}  ·  {name.ToUpperInvariant()}";
 
         public static string PartName(GunPart part)

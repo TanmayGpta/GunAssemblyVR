@@ -600,8 +600,8 @@ namespace VRArmory.Editor
             menu.restartButton = MakeButton(p, "Restart_Button", VRTrainingText.Restart, new Vector2(352f - 80f, -186f), new Vector2(160f, 52f), false);
             // Left of Restart: hear the current instruction (and see its demonstration) again.
             menu.repeatButton = MakeButton(p, "Repeat_Button", VRTrainingText.Repeat, new Vector2(352f - 160f - 12f - 100f, -186f), new Vector2(200f, 52f), false);
-            // Far left: back to the weapon cards (another weapon, or carry on with this one).
-            menu.changeWeaponButton = MakeButton(p, "Change_Weapon_Button", VRTrainingText.ChangeWeapon, new Vector2(-352f + 115f, -186f), new Vector2(230f, 52f), false);
+            // Far left: exit back to the modules screen.
+            menu.exitButton = MakeButton(p, "Exit_Button", VRTrainingText.Exit, new Vector2(-352f + 85f, -186f), new Vector2(170f, 52f), false);
         }
 
         static void BuildComplete(Transform root, VRTrainingMenu menu)
@@ -624,8 +624,9 @@ namespace VRArmory.Editor
             menu.resultText = Label(stats.transform, "Result", "", 28, TextPrimary, Vector2.zero, new Vector2(500f, 64f), TextAnchor.MiddleCenter, FontStyle.Bold);
             menu.resultText.supportRichText = true;
 
-            menu.trainAgainButton = MakeButton(p, "Train_Again_Button", VRTrainingText.TrainAgain, new Vector2(-150f, -178f), new Vector2(260f, 64f), false);
-            menu.modulesButton = MakeButton(p, "Modules_Button", VRTrainingText.BackToModules, new Vector2(150f, -178f), new Vector2(280f, 64f), true);
+            menu.trainAgainButton = MakeButton(p, "Train_Again_Button", VRTrainingText.TrainAgain, new Vector2(-235f, -178f), new Vector2(215f, 64f), false);
+            menu.changeWeaponButton = MakeButton(p, "Change_Weapon_Button", VRTrainingText.ChangeWeapon, new Vector2(0f, -178f), new Vector2(220f, 64f), false);
+            menu.modulesButton = MakeButton(p, "Modules_Button", VRTrainingText.BackToModules, new Vector2(235f, -178f), new Vector2(215f, 64f), true);
         }
 
         // A module card: the whole card is the button.
