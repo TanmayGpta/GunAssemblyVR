@@ -496,8 +496,40 @@ namespace VRArmory.Tests
             AssemblyPart barrel = P(GunPart.Barrel);
             SnapSocket barrelSocket = S("Socket_Barrel");
             Transform view = cam.transform;
+
+            // Distance ray must neither hover nor grab gun parts (UI rays remain active, tested via PressButton above).
+            {
+                ActionBasedController rc = FindController("Right Controller");
+                XRRayInteractor rightRay = rc.GetComponentInChildren<XRRayInteractor>();
+                Vector3 partPos = barrel.Colliders[0].bounds.center;
+                R.pos = rightRest; R.grip = false;
+                R.rot = Quaternion.LookRotation(partPos - R.pos);
+                for (int i = 0; i < 120 && Vector3.Angle(rightRay.rayOriginTransform.forward, partPos - rightRay.rayOriginTransform.position) > 0.5f; i++)
+                    yield return Frames(1);
+                yield return Frames(4);
+                R.grip = true;
+                yield return Frames(4);
+                Check("vr-no-ray-hover-or-grab-on-parts", rightRay.interactablesHovered.Count == 0 && !barrel.IsHeld && !rightRay.hasSelection,
+                    $"hovered={rightRay.interactablesHovered.Count} held={barrel.IsHeld} hasSel={rightRay.hasSelection}");
+                R.grip = false; R.rot = Quaternion.identity;
+                yield return Frames(3);
+            }
+
+            // Dedicated pose swap check: idle controller hand -> Direct Hover hides controller hand & shows PartGrip -> exit restores controller hand.
+            R.pos = rightRest; R.grip = false;
+            yield return Frames(5);
+            Check("vr-hand-pose-idle", HandRigVisible("VR_Controller_Hand_Right") && !HandRigVisible("VR_PartGrip_Hand_Right") && !HandRigVisible("VR_GunGrip_Hand_Right"));
+            R.pos = barrel.Colliders[0].bounds.center; R.grip = false;
+            yield return Frames(5);
+            Check("vr-hand-pose-direct-hover-part", !HandRigVisible("VR_Controller_Hand_Right") && HandRigVisible("VR_PartGrip_Hand_Right") && !HandRigVisible("VR_GunGrip_Hand_Right"),
+                $"ctrl={HandRigVisible("VR_Controller_Hand_Right")} part={HandRigVisible("VR_PartGrip_Hand_Right")} gun={HandRigVisible("VR_GunGrip_Hand_Right")}");
+            R.pos = rightRest;
+            yield return Frames(5);
+            Check("vr-hand-pose-restored-on-hover-exit", HandRigVisible("VR_Controller_Hand_Right") && !HandRigVisible("VR_PartGrip_Hand_Right"));
+
             yield return GrabAt(R, barrel);
             yield return Hold(0.3f);
+            Check("vr-hand-pose-held-part", !HandRigVisible("VR_Controller_Hand_Right") && HandRigVisible("VR_PartGrip_Hand_Right") && !HandRigVisible("VR_GunGrip_Hand_Right"));
             Check("v11-target-guidance-on-grab", guide.CurrentPhase == VRGuidance.Phase.Place && guide.TargetSocket == barrelSocket && guide.GuideLineVisible
                                                  && menu.headlineText.text == VRTrainingText.Place(GunPart.Barrel),
                 $"phase={guide.CurrentPhase} target={guide.TargetSocket?.name} line={guide.GuideLineVisible} headline='{menu.headlineText.text}'");
@@ -541,32 +573,25 @@ namespace VRArmory.Tests
             L.pos = leftRest;
             yield return Hold(0.6f);
 
-            // ---- Two-handed slide: no jump when the second hand joins or either hand leaves
+            // ---- Held slide stays single-handed: second hand close to it cannot attach or trigger a pose
             AssemblyPart slide = P(GunPart.UpperSlide);
             VRAssemblyGrab slideGrab = slide.GetComponent<VRAssemblyGrab>();
             yield return GrabAt(L, slide);
             yield return LiftTo(L, slide, origin.transform.position + new Vector3(-0.1f, 1.15f, 0.45f));
-            Vector3 p0 = slide.transform.position; Quaternion r0 = slide.transform.rotation;
             R.pos = slide.Colliders[0].bounds.center + Vector3.forward * 0.02f; R.rot = L.rot; R.grip = false;
-            yield return Frames(3);
+            yield return Frames(4);
+            Check("vr-second-hand-no-pose-on-held", HandRigVisible("VR_Controller_Hand_Right") && !HandRigVisible("VR_PartGrip_Hand_Right") && !HandRigVisible("VR_GunGrip_Hand_Right"));
             R.grip = true;
-            yield return Hold(0.4f);
-            float jumpJoin = Vector3.Distance(p0, slide.transform.position), turnJoin = Quaternion.Angle(r0, slide.transform.rotation);
-            Check("two-handed-grab", slideGrab.interactorsSelecting.Count == 2, $"holders={slideGrab.interactorsSelecting.Count}");
-            Check("two-handed-no-jump-on-join", jumpJoin < 0.01f && turnJoin < 3f, $"moved {jumpJoin * 1000f:0.0} mm, turned {turnJoin:0.0} deg");
-            p0 = slide.transform.position; r0 = slide.transform.rotation;
-            L.grip = false;
-            yield return Hold(0.4f);
-            float jumpLeave = Vector3.Distance(p0, slide.transform.position), turnLeave = Quaternion.Angle(r0, slide.transform.rotation);
-            Check("release-one-hand-keeps-holding", slideGrab.interactorsSelecting.Count == 1 && slide.IsHeld, $"holders={slideGrab.interactorsSelecting.Count}");
-            Check("two-handed-no-jump-on-release", jumpLeave < 0.01f && turnLeave < 3f, $"moved {jumpLeave * 1000f:0.0} mm, turned {turnLeave:0.0} deg");
+            yield return Hold(0.3f);
+            Check("vr-second-hand-cannot-attach-held", slideGrab.interactorsSelecting.Count == 1 && IsHeldBy(slideGrab, left),
+                $"holders={slideGrab.interactorsSelecting.Count}");
+            R.grip = false; R.pos = rightRest;
+            yield return Frames(3);
             Check("v11-host-held-guidance", guide.HostHeld == slide && guide.HighlightedPart == P(GunPart.Barrel)
                                             && menu.detailText.text == VRTrainingText.HostHeldDetail(GunPart.UpperSlide), menu.detailText.text);
 
             // ---- Step 1 while the slide is held in the air: barrel seated by the other hand
-            L.grip = false;
-            yield return Frames(2);
-            yield return GrabAndRelease(L, P(GunPart.Barrel), S("Socket_Barrel"), Quaternion.identity, true);
+            yield return GrabAndRelease(R, P(GunPart.Barrel), S("Socket_Barrel"), Quaternion.identity, true);
             yield return Hold(0.4f);
             Check("vr-step1-seated-into-held-slide", S("Socket_Barrel").IsFilled && P(GunPart.Barrel).transform.parent == slide.transform && mgr.CurrentStepIndex == 1,
                 $"step={mgr.CurrentStepIndex}");
@@ -578,7 +603,7 @@ namespace VRArmory.Tests
                                                       && SaidAt(VoiceLine.Common_WellDone) < SaidAt(VoiceLine.Asm_Pick_Spring),
                 $"well done at {SaidAt(VoiceLine.Common_WellDone):0.0} s, next instruction at {SaidAt(VoiceLine.Asm_Pick_Spring):0.0} s");
             Check("v12-no-repeat-on-regrab", Said(VoiceLine.Asm_Place_Barrel) == 1, $"the barrel was grabbed 5 times, its instruction spoken {Said(VoiceLine.Asm_Place_Barrel)} time(s)");
-            R.grip = false;   // put the slide back
+            L.grip = false;   // put the slide back
             yield return Hold(0.6f);
             Check("held-slide-returned-with-barrel", !slide.IsHeld && P(GunPart.Barrel).transform.parent == slide.transform);
             Check("v11-step2-spring-highlighted", guide.HighlightedPart == spring, guide.HighlightedPart?.name);
@@ -597,16 +622,11 @@ namespace VRArmory.Tests
             Check("vr-step2-seated", S("Socket_RecoilSpring").IsFilled && mgr.CurrentStepIndex == 2);
             Check("v11-step3-slide-highlighted", guide.HighlightedPart == slide, guide.HighlightedPart?.name);
 
-            // ---- Step 3, v1.1: two-handed slide guided onto the frame; both hands are let go when it clicks in
+            // ---- Step 3, v1.1: single-handed slide guided onto the frame; hand is let go when it clicks in
             yield return GrabAt(L, slide);
-            R.pos = slide.Colliders[0].bounds.center + Vector3.forward * 0.02f; R.rot = L.rot; R.grip = false;
-            yield return Frames(3);
-            R.grip = true;
-            yield return Hold(0.4f);
-            int holders = slideGrab.interactorsSelecting.Count;
-            yield return CarryBothTo(slide, () => SeatPose(S("Socket_Slide")), 1.2f);
-            Check("v11-two-handed-assisted-seat", holders == 2 && S("Socket_Slide").IsFilled && slideGrab.interactorsSelecting.Count == 0,
-                $"holders before={holders}, filled={S("Socket_Slide").IsFilled}, holders after={slideGrab.interactorsSelecting.Count}");
+            yield return CarryTo(L, slide, () => SeatPose(S("Socket_Slide")), 1.2f);
+            Check("v11-assisted-seat-single-hand", S("Socket_Slide").IsFilled && slideGrab.interactorsSelecting.Count == 0,
+                $"filled={S("Socket_Slide").IsFilled}, holders after={slideGrab.interactorsSelecting.Count}");
             L.grip = false; R.grip = false;
             L.pos = leftRest; R.pos = rightRest;
             yield return Hold(0.5f);
@@ -631,6 +651,8 @@ namespace VRArmory.Tests
             yield return GrabAt(R, frame);
             yield return LiftTo(R, frame, origin.transform.position + new Vector3(0.05f, 1.15f, 0.45f));
             Check("pistol-held", frame.IsHeld);
+            Check("vr-hand-pose-gun-grip", !HandRigVisible("VR_Controller_Hand_Right") && HandRigVisible("VR_GunGrip_Hand_Right") && !HandRigVisible("VR_PartGrip_Hand_Right"),
+                $"ctrl={HandRigVisible("VR_Controller_Hand_Right")} gun={HandRigVisible("VR_GunGrip_Hand_Right")} part={HandRigVisible("VR_PartGrip_Hand_Right")}");
             Transform rightCtrl = FindController("Right Controller").transform;
             Check("v11-fc-tooltip-on-pistol-hand", guide.TooltipText == VRTrainingText.PressButton("A") && Vector3.Distance(guide.TooltipTransform.position, rightCtrl.position) < 0.15f
                                                   && menu.headlineText.text == VRTrainingText.StageTitle(0),
@@ -746,6 +768,8 @@ namespace VRArmory.Tests
             yield return Frames(3);
             L.grip = true;
             yield return Frames(4);
+            Check("vr-hand-pose-rack-uses-controller-hand", HandRigVisible("VR_Controller_Hand_Left") && !HandRigVisible("VR_PartGrip_Hand_Left"),
+                $"leftCtrl={HandRigVisible("VR_Controller_Hand_Left")} leftPart={HandRigVisible("VR_PartGrip_Hand_Left")}");
             for (int i = 1; i <= 10; i++)
             {
                 L.pos = grip.position + rear * (fc.slideTravel * 1.1f * i / 10f);
@@ -976,6 +1000,16 @@ namespace VRArmory.Tests
             ActionBasedController c = FindController(device == left ? "Left Controller" : "Right Controller");
             foreach (IXRSelectInteractor i in g.interactorsSelecting)
                 if (i.transform.IsChildOf(c.transform)) return true;
+            return false;
+        }
+
+        bool HandRigVisible(string objectName)
+        {
+            VRControllerHands ch = FindObjectOfType<VRControllerHands>(true);
+            Transform root = ch != null ? ch.transform.parent : null;
+            if (root == null) return false;
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == objectName) return t.gameObject.activeInHierarchy;
             return false;
         }
 

@@ -409,9 +409,8 @@ namespace VRArmory.Editor
             grab.addDefaultGrabTransformers = false;
             grab.startingSingleGrabTransformers = new List<XRBaseGrabTransformer> { transformer };
             grab.startingMultipleGrabTransformers = new List<XRBaseGrabTransformer> { transformer };
-            // Frame and slide are the large sub-assemblies: a second hand may join to turn them.
-            bool twoHanded = part.partType == GunPart.LowerFrame || part.partType == GunPart.UpperSlide || part.partType == GunPart.UpperReceiver;
-            grab.selectMode = twoHanded ? InteractableSelectMode.Multiple : InteractableSelectMode.Single;
+            // Every gun part is held single-handed; only the separate slide-rack grip interacts with the other hand.
+            grab.selectMode = InteractableSelectMode.Single;
             grab.enabled = false; // VRPlatformSwitch enables it when a headset is running
             EditorUtility.SetDirty(transformer);
             EditorUtility.SetDirty(grab);

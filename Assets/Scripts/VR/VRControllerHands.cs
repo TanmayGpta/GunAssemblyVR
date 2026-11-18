@@ -47,6 +47,36 @@ namespace VRArmory
         [Tooltip("How fast fingers follow the buttons (1/s).")]
         public float fingerSpeed = 20f;
 
+        public enum PoseSwapTrigger { OnDirectHover, OnGrab }
+        public enum PoseKind { None, GunGrip, PartGrip }
+
+        [Header("Object-attached hand poses (controllers only)")]
+        [Tooltip("OnDirectHover: hide the controller hand and show the object's separate pose hand as soon as the Direct Interactor touches it. OnGrab: swap only once gripped.")]
+        public PoseSwapTrigger poseSwapTrigger = PoseSwapTrigger.OnDirectHover;
+        [Tooltip("Trigger radius (m) of each controller's Direct Interactor sphere for hovering near parts (0 leaves the prefab radius unchanged).")]
+        public float directHoverRadius = 0.09f;
+        [Tooltip("Offset of the controller Direct Interactor trigger sphere in controller space, shifted forward toward the palm/fingers.")]
+        public Vector3 directHoverOffset = new Vector3(0f, -0.01f, 0.025f);
+        [Tooltip("Maximum direct-hover distance (m) from the palm trigger center before the Gun Grip pose swaps on (0 = full sphere radius).")]
+        public float gunHoverMaxDistance = 0.055f;
+        [Tooltip("Extra distance margin (m) a neighboring part must beat the current hovered part by before stealing hover.")]
+        public float hoverSwitchMargin = 0.012f;
+
+        [Header("Parts grip pose (separate hand pose for gun parts)")]
+        [Tooltip("Finger curl angles (deg) where Index & Middle start before fitting to the part mesh.")]
+        public Vector3 partOpenCurl = new Vector3(18f, 22f, 12f);
+        public Vector3 partMinCurl = new Vector3(34f, 42f, 22f);
+        public Vector3 partMaxCurl = new Vector3(72f, 84f, 48f);
+        [Tooltip("Reference curl (deg) used to measure the thumb-index pinch anchor point.")]
+        public Vector3 partPinchRefCurl = new Vector3(48f, 58f, 32f);
+        public Vector3 partRingCurl = new Vector3(78f, 88f, 52f);
+        public Vector3 partLittleCurl = new Vector3(82f, 90f, 55f);
+        public Vector3 partThumbBaseRotation = new Vector3(10f, -34f, 12f);
+        public Vector3 partThumbKnuckleRotation = new Vector3(18f, 12f, 0f);
+        public Vector3 partThumbTipRotation = new Vector3(22f, 6f, 0f);
+        [Range(0.6f, 1.2f)] public float partThumbLength = 0.9f;
+        public Vector3 partGripOffset = Vector3.zero;
+
         [Header("Pistol wrap (fingers bend until they touch the grip)")]
         [Tooltip("Most the middle/ring/little fingers may bend while wrapping the grip (knuckle, middle, last joint, deg).")]
         public Vector3 wrapMaxCurl = new Vector3(90f, 100f, 70f);
@@ -117,31 +147,68 @@ namespace VRArmory
         }
 
         static readonly Dictionary<Mesh, Box> FitCache = new Dictionary<Mesh, Box>();
+        readonly Dictionary<Component, Bounds> visualBoundsCache = new Dictionary<Component, Bounds>();
+
+        class HandRig
+        {
+            public Transform root, palm;
+            public Quaternion palmRot;
+            public Vector3 palmPos;
+            public Finger index, thumb;
+            public readonly List<Finger> wrap = new List<Finger>();
+            public readonly Quaternion[] thumbRot = new Quaternion[3];
+            public Vector3[] debugPath;
+        }
 
         class Side
         {
             public bool left;
             public ActionBasedController controller;
-            public Transform root, pistolAttach;
-            public Quaternion palmRot;
-            public Vector3 palmPos;
+            public XRDirectInteractor direct;
+            public XRBaseInteractor[] grabInteractors;
+            public Transform pistolAttach;
+            public HandRig controllerRig, gunPoseRig, partPoseRig;
             public XRBaseController[] controllers;
-            public Finger index, thumb;
-            public readonly List<Finger> wrap = new List<Finger>();
             public InputAction triggerTouch, thumbTouch;
             public float grip, trigger, touch, thumbDown;
-            public VRAssemblyGrab pistol;
-            public Transform palm;
-            public readonly Quaternion[] thumbRot = new Quaternion[3];  // smoothed thumb joint rotations while wrapping
-            public Vector3[] debugPath;
-            public readonly List<Box> gripBoxes = new List<Box>();    // Grip_* pieces: fingers and thumb wrap these
-            public readonly List<Box> indexBoxes = new List<Box>();   // grip + Trigger*: the index rests on these
+            public VRAssemblyGrab pistol;         // currently held LowerFrame (attach point + recoil)
+            public VRAssemblyGrab cachedGunGrab;  // LowerFrame currently loaded into gripBoxes/triggerSolids
+            public IXRSelectInteractable activeTarget;
+            public PoseKind activeKind;
+            public bool targetWasSelected;
+            public Vector3 handPosInGun;
+            public Quaternion handRotInGun = Quaternion.identity;
+            public Vector3 handLocalPos;
+            public Quaternion handLocalRot = Quaternion.identity;
+            public Component cachedPartComponent;
+            public Bounds cachedPartBounds;
+            public bool hasCachedPartBounds;
+            public Vector3 heldAnchorLocal;
+            public Vector3 partPinchLocal;
+            public readonly List<Box> gripBoxes = new List<Box>();       // Grip_* pieces: fingers and thumb wrap these
+            public readonly List<Box> indexBoxes = new List<Box>();      // grip + Trigger*: the index rests on these
+            public readonly List<Box> partBoxes = new List<Box>();       // visual mesh bounds for part pinch pose
             public readonly List<Solid> triggerSolids = new List<Solid>(); // Trigger* surfaces: the pull bend stops at these
             public readonly List<Vector3> gripPoints = new List<Vector3>(); // grip surface vertices in grip-attach space
             public readonly Dictionary<IXRInteractor, Transform> originalAttach = new Dictionary<IXRInteractor, Transform>();
         }
 
         readonly List<Side> sides = new List<Side>();
+
+        void OnEnable() => Application.onBeforeRender += OnBeforeRender;
+
+        void OnDisable()
+        {
+            Application.onBeforeRender -= OnBeforeRender;
+            foreach (Side s in sides)
+            {
+                SetRigActive(s.gunPoseRig, false);
+                SetRigActive(s.partPoseRig, false);
+                s.activeTarget = null;
+                s.activeKind = PoseKind.None;
+                s.targetWasSelected = false;
+            }
+        }
 
         void Start()
         {
@@ -152,6 +219,7 @@ namespace VRArmory
 
         void OnDestroy()
         {
+            visualBoundsCache.Clear();
             foreach (Side s in sides)
             {
                 s.triggerTouch?.Dispose();
@@ -170,6 +238,52 @@ namespace VRArmory
                 foreach (Renderer r in poke.GetComponentsInChildren<Renderer>(true))
                     r.enabled = false;
 
+            string sideTag = left ? "Left" : "Right";
+            s.controllerRig = BuildHandRig(left, s.controller.transform, prefab, $"VR_Controller_Hand_{sideTag}", true);
+            if (s.controllerRig == null) return;
+            s.gunPoseRig = BuildHandRig(left, transform, prefab, $"VR_GunGrip_Hand_{sideTag}", false);
+            s.partPoseRig = BuildHandRig(left, transform, prefab, $"VR_PartGrip_Hand_{sideTag}", false);
+
+            s.controllers = controllerObject.GetComponentsInChildren<XRBaseController>(true);
+
+            s.pistolAttach = new GameObject("VR_Controller_Pistol_Attach").transform;
+            s.pistolAttach.SetParent(s.controller.transform, false);
+            Place(s);
+
+            var grabList = new List<XRBaseInteractor>();
+            foreach (XRBaseInteractor i in s.controller.GetComponentsInChildren<XRBaseInteractor>(true))
+            {
+                if (i is XRPokeInteractor) continue;
+                grabList.Add(i);
+                if (i is XRDirectInteractor direct && s.direct == null)
+                {
+                    s.direct = direct;
+                    if (directHoverRadius > 0f)
+                    {
+                        foreach (SphereCollider sphere in direct.GetComponents<SphereCollider>())
+                        {
+                            sphere.radius = directHoverRadius;
+                            sphere.center = directHoverOffset;
+                        }
+                    }
+                }
+                i.selectEntered.AddListener(args => OnSelect(s, args, true));
+                i.selectExited.AddListener(args => OnSelect(s, args, false));
+            }
+            s.grabInteractors = grabList.ToArray();
+
+            string device = left ? "{LeftHand}" : "{RightHand}";
+            s.triggerTouch = new InputAction(type: InputActionType.Button, binding: $"<XRController>{device}/triggerTouched");
+            s.thumbTouch = new InputAction(type: InputActionType.Button);
+            foreach (string control in new[] { "thumbstickTouched", "primaryTouched", "secondaryTouched", "thumbrestTouched" })
+                s.thumbTouch.AddBinding($"<XRController>{device}/{control}");
+            s.triggerTouch.Enable();
+            s.thumbTouch.Enable();
+            sides.Add(s);
+        }
+
+        HandRig BuildHandRig(bool left, Transform parent, GameObject prefab, string objectName, bool active)
+        {
             // Instantiate under an inactive holder so the tracking drivers never run, then strip every script.
             var holder = new GameObject("Hand_Build");
             holder.SetActive(false);
@@ -181,7 +295,7 @@ namespace VRArmory
             for (int i = scripts.Length - 1; i >= 0; i--) DestroyImmediate(scripts[i]);
             if (handMaterial != null)
                 foreach (SkinnedMeshRenderer smr in hand.GetComponentsInChildren<SkinnedMeshRenderer>(true)) smr.sharedMaterial = handMaterial;
-            hand.name = left ? "VR_Controller_Hand_Left" : "VR_Controller_Hand_Right";
+            hand.name = objectName;
 
             string p = left ? "L_" : "R_";
             var bones = new Dictionary<string, Transform>();
@@ -190,51 +304,38 @@ namespace VRArmory
             {
                 Debug.LogWarning($"[VR Armory] Controller hand: {p}Palm not found in {prefab.name}.", this);
                 Destroy(holder);
-                return;
+                return null;
             }
-            s.index = MakeFinger(bones, p + "IndexTip", p + "IndexProximal", p + "IndexIntermediate", p + "IndexDistal");
-            s.thumb = MakeFinger(bones, p + "ThumbTip", p + "ThumbMetacarpal", p + "ThumbProximal", p + "ThumbDistal");
+
+            var rig = new HandRig
+            {
+                root = hand.transform,
+                palm = palm,
+                index = MakeFinger(bones, p + "IndexTip", p + "IndexProximal", p + "IndexIntermediate", p + "IndexDistal"),
+                thumb = MakeFinger(bones, p + "ThumbTip", p + "ThumbMetacarpal", p + "ThumbProximal", p + "ThumbDistal"),
+            };
             foreach (string f in new[] { "Middle", "Ring", "Little" })
             {
                 Finger finger = MakeFinger(bones, p + f + "Tip", p + f + "Proximal", p + f + "Intermediate", p + f + "Distal");
-                if (finger != null) s.wrap.Add(finger);
+                if (finger != null) rig.wrap.Add(finger);
             }
 
             // Palm pose in the hand's own space (bind pose).
-            Transform root = hand.transform;
-            root.localPosition = Vector3.zero;
-            root.localRotation = Quaternion.identity;
-            Quaternion palmRot = Quaternion.Inverse(root.rotation) * palm.rotation;
-            Vector3 palmPos = root.InverseTransformPoint(palm.position);
-
-            root.SetParent(s.controller.transform, false);
+            rig.root.localPosition = Vector3.zero;
+            rig.root.localRotation = Quaternion.identity;
+            rig.palmRot = Quaternion.Inverse(rig.root.rotation) * palm.rotation;
+            rig.palmPos = rig.root.InverseTransformPoint(palm.position);
+            rig.root.SetParent(parent, false);
+            rig.root.gameObject.SetActive(active);
             Destroy(holder);
-            s.root = root;
-            s.palmRot = palmRot;
-            s.palmPos = palmPos;
-            s.palm = palm;
-            StoreThumb(s);
-            s.controllers = controllerObject.GetComponentsInChildren<XRBaseController>(true);
+            StoreThumb(rig);
+            return rig;
+        }
 
-            s.pistolAttach = new GameObject("VR_Controller_Pistol_Attach").transform;
-            s.pistolAttach.SetParent(s.controller.transform, false);
-            Place(s);
-
-            foreach (XRBaseInteractor i in s.controller.GetComponentsInChildren<XRBaseInteractor>(true))
-            {
-                if (i is XRPokeInteractor) continue;
-                i.selectEntered.AddListener(args => OnSelect(s, args, true));
-                i.selectExited.AddListener(args => OnSelect(s, args, false));
-            }
-
-            string device = left ? "{LeftHand}" : "{RightHand}";
-            s.triggerTouch = new InputAction(type: InputActionType.Button, binding: $"<XRController>{device}/triggerTouched");
-            s.thumbTouch = new InputAction(type: InputActionType.Button);
-            foreach (string control in new[] { "thumbstickTouched", "primaryTouched", "secondaryTouched", "thumbrestTouched" })
-                s.thumbTouch.AddBinding($"<XRController>{device}/{control}");
-            s.triggerTouch.Enable();
-            s.thumbTouch.Enable();
-            sides.Add(s);
+        static void SetRigActive(HandRig rig, bool active)
+        {
+            if (rig != null && rig.root != null && rig.root.gameObject.activeSelf != active)
+                rig.root.gameObject.SetActive(active);
         }
 
         Finger MakeFinger(Dictionary<string, Transform> bones, string tip, params string[] names)
@@ -261,29 +362,25 @@ namespace VRArmory
             {
                 if (!s.originalAttach.ContainsKey(interactor)) s.originalAttach[interactor] = interactor.attachTransform;
                 interactor.attachTransform = s.pistolAttach;
-                if (s.pistol != grab) CollectBoxes(s, grab);
+                s.pistol = grab;
+                if (s.cachedGunGrab != grab) CollectGunBoxes(s, grab);
             }
             else if (s.originalAttach.TryGetValue(interactor, out Transform original))
             {
                 interactor.attachTransform = original;
                 s.originalAttach.Remove(interactor);
-                if (s.originalAttach.Count == 0)
-                {
-                    s.pistol = null;
-                    s.gripBoxes.Clear();
-                    s.indexBoxes.Clear();
-                    s.triggerSolids.Clear();
-                }
+                if (s.originalAttach.Count == 0) s.pistol = null;
             }
         }
 
-        static void CollectBoxes(Side s, VRAssemblyGrab grab)
+        static void CollectGunBoxes(Side s, VRAssemblyGrab grab)
         {
-            s.pistol = grab;
+            s.cachedGunGrab = grab;
             s.gripBoxes.Clear();
             s.indexBoxes.Clear();
             s.triggerSolids.Clear();
             s.gripPoints.Clear();
+            if (grab == null) return;
             Transform g = grab.attachTransform;
             foreach (MeshFilter mf in grab.GetComponentsInChildren<MeshFilter>(true))
             {
@@ -361,8 +458,10 @@ namespace VRArmory
             Vector3 dorsal = (s.left ? Vector3.left : Vector3.right) * (flipPalm ? -1f : 1f);
             Quaternion targetRot = Quaternion.Euler(rotationOffset) * Quaternion.LookRotation(knuckles, dorsal);
             Vector3 targetPos = dorsal * palmDepth + positionOffset;
-            s.root.localRotation = targetRot * Quaternion.Inverse(s.palmRot);
-            s.root.localPosition = targetPos - s.root.localRotation * s.palmPos;
+            s.handLocalRot = targetRot * Quaternion.Inverse(s.controllerRig.palmRot);
+            s.handLocalPos = targetPos - s.handLocalRot * s.controllerRig.palmPos;
+            s.controllerRig.root.localRotation = s.handLocalRot;
+            s.controllerRig.root.localPosition = s.handLocalPos;
 
             // Pistol in the fist: muzzle along the knuckles, slide towards the thumb.
             Vector3 thumbSide = Vector3.Cross(knuckles, dorsal) * (s.left ? -1f : 1f);
@@ -371,6 +470,9 @@ namespace VRArmory
             float palmSide = Mathf.Sign((Quaternion.Inverse(pistolRot) * dorsal).x);
             s.pistolAttach.localRotation = pistolRot * Quaternion.Euler(0f, -palmSide * gripYaw, 0f);
             s.pistolAttach.localPosition = positionOffset + s.pistolAttach.localRotation * pistolHoldOffset;
+
+            s.handPosInGun = Quaternion.Inverse(s.pistolAttach.localRotation) * (s.handLocalPos - s.pistolAttach.localPosition);
+            s.handRotInGun = Quaternion.Inverse(s.pistolAttach.localRotation) * s.handLocalRot;
             ApplyRecoil(s);
         }
 
@@ -386,7 +488,7 @@ namespace VRArmory
             Quaternion turn = Quaternion.AngleAxis(gun.kickAngle, axis);
             Vector3 back = offset.sqrMagnitude > 1e-10f ? offset.normalized : Vector3.zero;
             Vector3 wrist = s.pistolAttach.localPosition + back * 0.07f;
-            foreach (Transform t in new[] { s.root, s.pistolAttach })
+            foreach (Transform t in new[] { s.controllerRig.root, s.pistolAttach })
             {
                 t.localPosition = wrist + turn * (t.localPosition - wrist) + offset;
                 t.localRotation = turn * t.localRotation;
@@ -404,12 +506,31 @@ namespace VRArmory
             }
         }
 
+        void OnBeforeRender()
+        {
+            foreach (Side s in sides)
+            {
+                if (s.controller == null || !s.controller.isActiveAndEnabled || s.activeTarget == null) continue;
+                if (s.activeKind == PoseKind.GunGrip) UpdateGunTransform(s);
+                else if (s.activeKind == PoseKind.PartGrip) UpdatePartTransform(s, s.targetWasSelected);
+            }
+        }
+
         void LateUpdate()
         {
             float k = 1f - Mathf.Exp(-fingerSpeed * Time.deltaTime);
             foreach (Side s in sides)
             {
-                if (s.root == null || !s.controller.isActiveAndEnabled) continue;
+                if (s.controllerRig == null || s.controller == null || !s.controller.isActiveAndEnabled)
+                {
+                    SetRigActive(s.gunPoseRig, false);
+                    SetRigActive(s.partPoseRig, false);
+                    s.activeTarget = null;
+                    s.activeKind = PoseKind.None;
+                    s.targetWasSelected = false;
+                    continue;
+                }
+
                 HideControllerModels(s);
                 Place(s);
                 s.grip = Mathf.Lerp(s.grip, Read(s.controller.selectActionValue), k);
@@ -417,51 +538,371 @@ namespace VRArmory
                 s.touch = Mathf.Lerp(s.touch, s.triggerTouch.IsPressed() ? 1f : 0f, k);
                 s.thumbDown = Mathf.Lerp(s.thumbDown, s.thumbTouch.IsPressed() || s.grip > 0.5f ? 1f : 0f, k);
 
-                // Holding the pistol: each finger bends until it touches the grip (index: the trigger), so nothing
-                // sinks into the handle. Otherwise the fixed button-driven poses.
-                bool wrapping = s.pistol != null && s.gripBoxes.Count > 0;
-                // Shorter thumb: pull the distal joint and the tip in along their bind offsets.
-                if (s.thumb != null && s.thumb.bones.Length >= 3)
+                ResolveActiveTarget(s, out PoseKind wantKind, out IXRSelectInteractable wantTarget, out bool wantSelected);
+                bool targetChanged = wantKind != s.activeKind || !ReferenceEquals(wantTarget, s.activeTarget);
+                if (targetChanged)
                 {
-                    s.thumb.bones[2].localPosition = s.thumb.bindPos[2] * thumbLength;
-                    if (s.thumb.tip != null) s.thumb.tip.localPosition = s.thumb.tipBindPos * thumbLength;
-                }
-                Vector3 above = Vector3.zero;   // solved curl of the finger above (middle -> ring -> little)
-                foreach (Finger f in s.wrap)
-                {
-                    Vector3 target = gripCurl;
-                    if (wrapping)
-                    {
-                        target = Vector3.Max(Solve(f, relaxedCurl, wrapMaxCurl, s.gripBoxes), above * wrapFollow);
-                        above = target;
-                    }
-                    f.held = Vector3.Lerp(f.held, target, k);
-                    Pose(f, Vector3.Lerp(relaxedCurl, f.held, s.grip));
+                    s.activeKind = wantKind;
+                    s.activeTarget = wantTarget;
+                    s.targetWasSelected = false;
                 }
 
-                if (wrapping && s.index != null)
+                SetRigActive(s.controllerRig, wantKind == PoseKind.None);
+                SetRigActive(s.gunPoseRig, wantKind == PoseKind.GunGrip);
+                SetRigActive(s.partPoseRig, wantKind == PoseKind.PartGrip);
+
+                if (wantKind == PoseKind.None)
                 {
-                    Vector3 rest = Solve(s.index, relaxedCurl, indexPullCurl, s.indexBoxes);
-                    s.index.held = Vector3.Lerp(s.index.held, rest, k);
-                    // Rest pose as before; the pull bend stops where the finger reaches the trigger instead of sinking in.
-                    Pose(s.index, Vector3.Max(Vector3.zero, s.index.held + indexPullExtra * PullRoom(s.index, s.index.held, s.trigger, s.triggerSolids)));
+                    PoseControllerIdle(s, k);
+                }
+                else if (wantKind == PoseKind.GunGrip)
+                {
+                    UpdateGunGrip(s, wantTarget as VRAssemblyGrab, wantSelected, targetChanged, k);
                 }
                 else
                 {
-                    Vector3 index = Vector3.Lerp(relaxedCurl, indexTouchCurl, Mathf.Max(s.touch, s.trigger > 0.02f ? 1f : 0f));
-                    Pose(s.index, Vector3.Lerp(index, indexPullCurl, s.trigger));
-                    if (s.index != null) s.index.held = index;
+                    UpdatePartGrip(s, wantTarget, wantSelected, targetChanged, k);
                 }
+                s.targetWasSelected = wantSelected;
+            }
+        }
 
-                if (wrapping && s.thumb != null) PoseThumbWrap(s, k);
+        void ResolveActiveTarget(Side s, out PoseKind kind, out IXRSelectInteractable target, out bool selected)
+        {
+            kind = PoseKind.None;
+            target = null;
+            selected = false;
+
+            if (s.grabInteractors != null)
+            {
+                foreach (XRBaseInteractor i in s.grabInteractors)
+                {
+                    if (i == null || !i.hasSelection) continue;
+                    foreach (IXRSelectInteractable sel in i.interactablesSelected)
+                    {
+                        PoseKind k = ClassifyTarget(sel);
+                        if (k == PoseKind.None) continue;
+                        kind = k;
+                        target = sel;
+                        selected = true;
+                        return;
+                    }
+                }
+            }
+
+            if (poseSwapTrigger != PoseSwapTrigger.OnDirectHover || s.direct == null || !s.direct.isActiveAndEnabled) return;
+
+            float bestScore = float.MaxValue;
+            Vector3 hoverOrigin = HoverOriginWorld(s);
+            foreach (IXRHoverInteractable hovered in s.direct.interactablesHovered)
+            {
+                if (!(hovered is IXRSelectInteractable sel)) continue;
+                var comp = sel as Component;
+                if (comp == null || !comp.gameObject.activeInHierarchy) continue;
+                PoseKind k = ClassifyTarget(sel);
+                if (k == PoseKind.None || sel.isSelected || !sel.IsSelectableBy(s.direct)) continue;
+
+                float d = ClosestDistanceToDirect(comp, sel, s.direct, hoverOrigin);
+                if (k == PoseKind.GunGrip && gunHoverMaxDistance > 0f && d > gunHoverMaxDistance) continue;
+
+                // Small margin so hovering near a part does not jitter onto an adjacent neighbor.
+                float score = !s.targetWasSelected && ReferenceEquals(sel, s.activeTarget) ? d - hoverSwitchMargin : d;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    target = sel;
+                    kind = k;
+                }
+            }
+        }
+
+        Vector3 HoverOriginWorld(Side s) => s.direct != null ? s.direct.transform.TransformPoint(directHoverOffset) : s.controller.transform.position;
+
+        static PoseKind ClassifyTarget(IXRSelectInteractable sel)
+        {
+            // Keep slide racking (VRPokeOnlyInteractable) with the live controller hand so it pulls back with the hand.
+            if (sel is VRAssemblyGrab grab) return grab.wrapTrackedHand ? PoseKind.GunGrip : PoseKind.PartGrip;
+            return PoseKind.None;
+        }
+
+        float ClosestDistanceToDirect(Component comp, IXRSelectInteractable sel, XRDirectInteractor direct, Vector3 originWorld)
+        {
+            if (TryGetVisualBounds(comp, null, out Bounds vb))
+            {
+                Vector3 localPt = comp.transform.InverseTransformPoint(originWorld);
+                return Vector3.Distance(comp.transform.TransformPoint(vb.ClosestPoint(localPt)), originWorld);
+            }
+            Collider col = comp.GetComponent<Collider>();
+            if (col != null && col.enabled) return Vector3.Distance(col.ClosestPoint(originWorld), originWorld);
+            Transform a = sel.GetAttachTransform(direct);
+            return a != null ? Vector3.Distance(a.position, originWorld) : float.MaxValue;
+        }
+
+        void PoseControllerIdle(Side s, float k)
+        {
+            HandRig rig = s.controllerRig;
+            ApplyThumbLength(rig, thumbLength);
+            foreach (Finger f in rig.wrap)
+            {
+                f.held = Vector3.Lerp(f.held, gripCurl, k);
+                Pose(f, Vector3.Lerp(relaxedCurl, f.held, s.grip));
+            }
+            if (rig.index != null)
+            {
+                Vector3 index = Vector3.Lerp(relaxedCurl, indexTouchCurl, Mathf.Max(s.touch, s.trigger > 0.02f ? 1f : 0f));
+                Pose(rig.index, Vector3.Lerp(index, indexPullCurl, s.trigger));
+                rig.index.held = index;
+            }
+            if (rig.thumb != null)
+            {
+                Vector3 thumb = Vector3.Lerp(thumbRestCurl, thumbDownCurl, s.thumbDown);
+                Pose(rig.thumb, thumb);
+                rig.thumb.held = thumb;
+                StoreThumb(rig);
+            }
+        }
+
+        void UpdateGunGrip(Side s, VRAssemblyGrab gunGrab, bool selected, bool targetChanged, float k)
+        {
+            if (gunGrab == null) return;
+            if (s.cachedGunGrab != gunGrab) CollectGunBoxes(s, gunGrab);
+
+            UpdateGunTransform(s);
+            HandRig rig = s.gunPoseRig;
+            ApplyThumbLength(rig, thumbLength);
+
+            bool wrapping = s.gripBoxes.Count > 0;
+            float gripWeight = selected ? Mathf.Max(0.85f, s.grip) : 1f;
+            float triggerInput = selected ? s.trigger : 0f;
+
+            Vector3 above = Vector3.zero;
+            foreach (Finger f in rig.wrap)
+            {
+                Vector3 target = gripCurl;
+                if (wrapping)
+                {
+                    target = Vector3.Max(Solve(f, relaxedCurl, wrapMaxCurl, s.gripBoxes), above * wrapFollow);
+                    above = target;
+                }
+                f.held = targetChanged ? target : Vector3.Lerp(f.held, target, k);
+                Pose(f, Vector3.Lerp(relaxedCurl, f.held, gripWeight));
+            }
+
+            if (rig.index != null)
+            {
+                if (wrapping)
+                {
+                    Vector3 rest = Solve(rig.index, relaxedCurl, indexPullCurl, s.indexBoxes);
+                    rig.index.held = targetChanged ? rest : Vector3.Lerp(rig.index.held, rest, k);
+                    Pose(rig.index, Vector3.Max(Vector3.zero, rig.index.held + indexPullExtra * PullRoom(rig.index, rig.index.held, triggerInput, s.triggerSolids)));
+                }
+                else
+                {
+                    Vector3 index = Vector3.Lerp(relaxedCurl, indexTouchCurl, Mathf.Max(s.touch, triggerInput > 0.02f ? 1f : 0f));
+                    Pose(rig.index, Vector3.Lerp(index, indexPullCurl, triggerInput));
+                    rig.index.held = index;
+                }
+            }
+
+            if (rig.thumb != null)
+            {
+                if (wrapping) PoseThumbWrap(s, rig, gunGrab, targetChanged ? 1f : k);
                 else
                 {
                     Vector3 thumb = Vector3.Lerp(thumbRestCurl, thumbDownCurl, s.thumbDown);
-                    Pose(s.thumb, thumb);
-                    if (s.thumb != null) s.thumb.held = thumb;
-                    StoreThumb(s);
+                    Pose(rig.thumb, thumb);
+                    rig.thumb.held = thumb;
+                    StoreThumb(rig);
                 }
             }
+        }
+
+        void UpdateGunTransform(Side s)
+        {
+            if (!(s.activeTarget is VRAssemblyGrab gunGrab) || s.gunPoseRig == null) return;
+            Transform attach = gunGrab.attachTransform != null ? gunGrab.attachTransform : gunGrab.transform;
+            s.gunPoseRig.root.position = attach.position + attach.rotation * s.handPosInGun;
+            s.gunPoseRig.root.rotation = attach.rotation * s.handRotInGun;
+        }
+
+        void UpdatePartGrip(Side s, IXRSelectInteractable target, bool selected, bool targetChanged, float k)
+        {
+            var comp = target as Component;
+            if (comp == null) return;
+            if (s.cachedPartComponent != comp) CollectPartBoxes(s, comp);
+
+            HandRig rig = s.partPoseRig;
+            ApplyThumbLength(rig, partThumbLength);
+
+            // Place the separate part-grip hand using a fixed reference pinch point before fitting Index/Middle.
+            ApplyPartStaticFingers(s, rig, setReferenceIndex: true);
+            s.partPinchLocal = MeasurePinchLocal(rig);
+            UpdatePartTransform(s, selected);
+
+            for (int i = 0; i < rig.wrap.Count; i++)
+            {
+                Finger f = rig.wrap[i];
+                if (i == 0)
+                {
+                    Vector3 fitted = s.partBoxes.Count > 0 ? Solve(f, partOpenCurl, partMaxCurl, s.partBoxes) : partMinCurl;
+                    fitted = Vector3.Max(fitted, partMinCurl);
+                    f.held = targetChanged ? fitted : Vector3.Lerp(f.held, fitted, k);
+                    Pose(f, f.held);
+                }
+                else
+                {
+                    Vector3 curl = i == 1 ? partRingCurl : partLittleCurl;
+                    f.held = targetChanged ? curl : Vector3.Lerp(f.held, curl, k);
+                    Pose(f, f.held);
+                }
+            }
+
+            if (rig.index != null)
+            {
+                Vector3 fitted = s.partBoxes.Count > 0 ? Solve(rig.index, partOpenCurl, partMaxCurl, s.partBoxes) : partPinchRefCurl;
+                fitted = Vector3.Max(fitted, partMinCurl);
+                rig.index.held = targetChanged ? fitted : Vector3.Lerp(rig.index.held, fitted, k);
+                Pose(rig.index, rig.index.held);
+            }
+        }
+
+        void UpdatePartTransform(Side s, bool selected)
+        {
+            var comp = s.activeTarget as Component;
+            HandRig rig = s.partPoseRig;
+            if (comp == null || rig == null || rig.root == null) return;
+
+            Transform targetT = comp.transform;
+            Vector3 anchorWorld;
+            if (selected)
+            {
+                if (!s.targetWasSelected)
+                {
+                    Vector3 selectRef = GetSelectedAttachWorld(s, s.activeTarget);
+                    s.heldAnchorLocal = s.hasCachedPartBounds
+                        ? s.cachedPartBounds.ClosestPoint(targetT.InverseTransformPoint(selectRef))
+                        : Vector3.zero;
+                }
+                anchorWorld = targetT.TransformPoint(s.heldAnchorLocal);
+            }
+            else
+            {
+                Vector3 hoverRef = HoverOriginWorld(s);
+                Vector3 localAnchor = s.hasCachedPartBounds
+                    ? s.cachedPartBounds.ClosestPoint(targetT.InverseTransformPoint(hoverRef))
+                    : Vector3.zero;
+                anchorWorld = targetT.TransformPoint(localAnchor);
+            }
+
+            Quaternion worldHandRot = s.controller.transform.rotation * s.handLocalRot;
+            rig.root.rotation = worldHandRot;
+            rig.root.position = anchorWorld - worldHandRot * s.partPinchLocal + worldHandRot * partGripOffset;
+        }
+
+        static Vector3 GetSelectedAttachWorld(Side s, IXRSelectInteractable target)
+        {
+            if (s.direct != null && s.direct.IsSelecting(target)) return s.direct.transform.position;
+            if (s.grabInteractors != null)
+            {
+                foreach (XRBaseInteractor i in s.grabInteractors)
+                    if (i != null && i.IsSelecting(target))
+                        return i.GetAttachTransform(target).position;
+            }
+            return (target as Component).transform.position;
+        }
+
+        void ApplyPartStaticFingers(Side s, HandRig rig, bool setReferenceIndex)
+        {
+            if (setReferenceIndex && rig.index != null) Pose(rig.index, partPinchRefCurl);
+            if (rig.thumb != null)
+            {
+                Pose(rig.thumb, thumbRestCurl);
+                if (rig.thumb.bones.Length >= 3)
+                {
+                    ManualTurn(rig, s.left, 0, partThumbBaseRotation);
+                    ManualTurn(rig, s.left, 1, partThumbKnuckleRotation);
+                    ManualTurn(rig, s.left, 2, partThumbTipRotation);
+                }
+            }
+        }
+
+        static Vector3 MeasurePinchLocal(HandRig rig)
+        {
+            if (rig.index == null || rig.thumb == null) return Vector3.zero;
+            Vector3 midpointWorld = Vector3.Lerp(TipPosition(rig.index), TipPosition(rig.thumb), 0.45f);
+            return rig.root.InverseTransformPoint(midpointWorld);
+        }
+
+        static void ApplyThumbLength(HandRig rig, float scale)
+        {
+            if (rig.thumb == null || rig.thumb.bones.Length < 3) return;
+            rig.thumb.bones[2].localPosition = rig.thumb.bindPos[2] * scale;
+            if (rig.thumb.tip != null) rig.thumb.tip.localPosition = rig.thumb.tipBindPos * scale;
+        }
+
+        void CollectPartBoxes(Side s, Component comp)
+        {
+            s.cachedPartComponent = comp;
+            s.partBoxes.Clear();
+            s.hasCachedPartBounds = TryGetVisualBounds(comp, s.partBoxes, out s.cachedPartBounds);
+        }
+
+        bool TryGetVisualBounds(Component comp, List<Box> outBoxes, out Bounds localBounds)
+        {
+            localBounds = default;
+            if (comp == null) return false;
+            if (outBoxes == null && visualBoundsCache.TryGetValue(comp, out localBounds)) return true;
+
+            Transform rootT = comp.transform;
+            AssemblyPart ownPart = comp.GetComponent<AssemblyPart>();
+            bool hasBounds = false;
+            foreach (MeshFilter mf in rootT.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf.sharedMesh == null) continue;
+                if (ownPart != null && mf.GetComponentInParent<AssemblyPart>(true) != ownPart) continue;
+                if (mf.GetComponentInParent<SnapSocket>(true) != null || mf.GetComponentInParent<Canvas>(true) != null) continue;
+                Renderer r = mf.GetComponent<Renderer>();
+                if (r == null || !r.enabled) continue;
+
+                if (outBoxes != null)
+                {
+                    Box box = FitBox(mf.sharedMesh);
+                    box.t = mf.transform;
+                    outBoxes.Add(box);
+                }
+
+                Matrix4x4 m = RelativeMatrix(rootT, mf.transform);
+                Bounds mb = mf.sharedMesh.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 c = mb.center + Vector3.Scale(mb.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    Vector3 p = m.MultiplyPoint3x4(c);
+                    if (!hasBounds) { localBounds = new Bounds(p, Vector3.zero); hasBounds = true; }
+                    else localBounds.Encapsulate(p);
+                }
+            }
+
+            if (!hasBounds)
+            {
+                BoxCollider bc = comp.GetComponent<BoxCollider>();
+                if (bc != null)
+                {
+                    localBounds = new Bounds(bc.center, bc.size);
+                    hasBounds = true;
+                    if (outBoxes != null) outBoxes.Add(new Box { t = bc.transform, rot = Quaternion.identity, b = localBounds });
+                }
+            }
+            if (hasBounds) visualBoundsCache[comp] = localBounds;
+            return hasBounds;
+        }
+
+        static Matrix4x4 RelativeMatrix(Transform root, Transform target)
+        {
+            if (target == null || target == root) return Matrix4x4.identity;
+            Transform parent = target.parent;
+            Matrix4x4 local = Matrix4x4.TRS(target.localPosition, target.localRotation, target.localScale);
+            if (parent == null || parent == root) return local;
+            return RelativeMatrix(root, parent) * local;
         }
 
         static float Read(InputActionProperty property)
@@ -508,23 +949,18 @@ namespace VRArmory
         //   palm-side back corner -> far back corner (behind the backstrap) -> forward along the far panel
         // and each joint in turn is placed on it: every bone is turned so its end lands on the path one bone-length on
         // from where the previous one ended. So the thumb follows the grip and never cuts through it or hangs in the air.
-        void PoseThumbWrap(Side s, float k)
+        void PoseThumbWrap(Side s, HandRig rig, VRAssemblyGrab gunGrab, float k)
         {
-            Finger t = s.thumb;
+            Finger t = rig.thumb;
             Pose(t, thumbRestCurl);
-            if (t.bones.Length >= 3 && thumbAutoWrap && TryThumbPath(s, out Vector3[] path))
+            if (t.bones.Length >= 3 && thumbAutoWrap && TryThumbPath(s, rig, gunGrab, out Vector3[] path))
             {
-                s.debugPath = path;
-                // Palm-to-knuckle bone: always heads for the far back corner, so it swings round behind the backstrap
-                // (searching the path from its start would pick the palm-side corner right in front of it and point it
-                // straight into the grip). Then the manual fine-tune turn, mirrored for the left hand.
-                // Aiming at the corner itself points it straight across the back (perpendicular to the grip); a real
-                // thumb base runs diagonally forward and down along the far side, so aim further along the far panel.
+                rig.debugPath = path;
+                Transform g = gunGrab != null ? gunGrab.attachTransform : null;
                 float seg0 = Vector3.Distance(path[0], path[1]);
-                Vector3 baseTarget = PathPoint(path, seg0 + thumbBaseAimForward) - s.pistol.attachTransform.up * thumbBaseAimDrop;
+                Vector3 baseTarget = PathPoint(path, seg0 + thumbBaseAimForward) - (g != null ? g.up : Vector3.up) * thumbBaseAimDrop;
                 Aim(t.bones[0], t.bones[1].position, baseTarget, 1f, thumbBaseTurnLimit);
-                ManualTurn(s, 0, thumbBaseRotation);
-                // Outer segments: placed along the far panel, starting from the far back corner.
+                ManualTurn(rig, s.left, 0, thumbBaseRotation);
                 float along = Vector3.Distance(path[0], path[1]);
                 for (int i = 1; i < 3; i++)
                 {
@@ -532,29 +968,29 @@ namespace VRArmory
                     Vector3 end = i + 1 < 3 ? t.bones[i + 1].position : TipPosition(t);
                     Vector3 target = OnPath(path, b.position, (end - b.position).magnitude, ref along);
                     Aim(b, end, target, 1f, 110f);
-                    ManualTurn(s, i, i == 1 ? thumbKnuckleRotation : thumbTipRotation);
+                    ManualTurn(rig, s.left, i, i == 1 ? thumbKnuckleRotation : thumbTipRotation);
                 }
             }
             else if (t.bones.Length >= 3)
             {
                 // Auto wrap off: rest pose plus the manual turns only, so every joint can be set by hand.
-                ManualTurn(s, 0, thumbBaseRotation);
-                ManualTurn(s, 1, thumbKnuckleRotation);
-                ManualTurn(s, 2, thumbTipRotation);
+                ManualTurn(rig, s.left, 0, thumbBaseRotation);
+                ManualTurn(rig, s.left, 1, thumbKnuckleRotation);
+                ManualTurn(rig, s.left, 2, thumbTipRotation);
             }
-            for (int i = 0; i < t.bones.Length && i < s.thumbRot.Length; i++)
+            for (int i = 0; i < t.bones.Length && i < rig.thumbRot.Length; i++)
             {
-                s.thumbRot[i] = Quaternion.Slerp(s.thumbRot[i], t.bones[i].localRotation, k);
-                t.bones[i].localRotation = s.thumbRot[i];
+                rig.thumbRot[i] = k >= 1f ? t.bones[i].localRotation : Quaternion.Slerp(rig.thumbRot[i], t.bones[i].localRotation, k);
+                t.bones[i].localRotation = rig.thumbRot[i];
             }
         }
 
         // Manual extra turn of one thumb bone in its own axes, mirrored for the left hand.
-        static void ManualTurn(Side s, int bone, Vector3 euler)
+        static void ManualTurn(HandRig rig, bool left, int bone, Vector3 euler)
         {
-            if (euler == Vector3.zero) return;
-            if (s.left) { euler.y = -euler.y; euler.z = -euler.z; }
-            s.thumb.bones[bone].localRotation *= Quaternion.Euler(euler);
+            if (euler == Vector3.zero || rig.thumb == null || bone >= rig.thumb.bones.Length) return;
+            if (left) { euler.y = -euler.y; euler.z = -euler.z; }
+            rig.thumb.bones[bone].localRotation *= Quaternion.Euler(euler);
         }
 
         void OnDrawGizmos()
@@ -563,17 +999,18 @@ namespace VRArmory
             Gizmos.color = Color.yellow;
             foreach (Side s in sides)
             {
-                if (s.pistol == null || s.debugPath == null) continue;
-                for (int i = 1; i < s.debugPath.Length; i++) Gizmos.DrawLine(s.debugPath[i - 1], s.debugPath[i]);
-                foreach (Vector3 p in s.debugPath) Gizmos.DrawWireSphere(p, 0.003f);
+                Vector3[] path = s.gunPoseRig?.debugPath;
+                if (s.cachedGunGrab == null || path == null) continue;
+                for (int i = 1; i < path.Length; i++) Gizmos.DrawLine(path[i - 1], path[i]);
+                foreach (Vector3 p in path) Gizmos.DrawWireSphere(p, 0.003f);
             }
         }
 
-        static void StoreThumb(Side s)
+        static void StoreThumb(HandRig rig)
         {
-            if (s.thumb == null) return;
-            for (int i = 0; i < s.thumb.bones.Length && i < s.thumbRot.Length; i++)
-                s.thumbRot[i] = s.thumb.bones[i].localRotation;
+            if (rig.thumb == null) return;
+            for (int i = 0; i < rig.thumb.bones.Length && i < rig.thumbRot.Length; i++)
+                rig.thumbRot[i] = rig.thumb.bones[i].localRotation;
         }
 
         // Turns bone so the point 'from' (its child joint) heads towards 'to': weight of the full turn, capped in degrees.
@@ -622,11 +1059,11 @@ namespace VRArmory
             return path[path.Length - 1];
         }
 
-        bool TryThumbPath(Side s, out Vector3[] path)
+        bool TryThumbPath(Side s, HandRig rig, VRAssemblyGrab gunGrab, out Vector3[] path)
         {
             path = null;
-            Transform g = s.pistol != null ? s.pistol.attachTransform : null;
-            if (g == null || s.palm == null || s.gripBoxes.Count == 0) return false;
+            Transform g = gunGrab != null ? gunGrab.attachTransform : null;
+            if (g == null || rig == null || rig.palm == null || s.gripBoxes.Count == 0) return false;
 
             // Grip outline in grip space. With the real surface points: only the slice at the thumb's height, so the
             // raked grip's lower back does not push the path cm out into the air. Without them: fitted box corners.
@@ -660,7 +1097,7 @@ namespace VRArmory
             float centreX = (min.x + max.x) * 0.5f;
             // Palm side from where the back of the hand faces (palm +Y), not from where the palm sits: with the hand
             // set back on the grip the palm is almost straight behind it and its position cannot tell the sides apart.
-            bool palmOnPlusX = g.InverseTransformDirection(s.palm.up).x > 0f;
+            bool palmOnPlusX = g.InverseTransformDirection(rig.palm.up).x > 0f;
             float farX = palmOnPlusX ? min.x - pad : max.x + pad;
             float backZ = min.z - pad;
 

@@ -64,7 +64,8 @@ namespace VRArmory
         protected override void OnEnable()
         {
             base.OnEnable();
-            if (snapVolume != null) snapVolume.enabled = true;
+            // Rays only interact with UI, so keep the ray snap volume off.
+            if (snapVolume != null) snapVolume.enabled = false;
         }
 
         protected override void OnDisable()
@@ -84,18 +85,22 @@ namespace VRArmory
         public override bool IsSelectableBy(IXRSelectInteractor interactor)
         {
             if (!base.IsSelectableBy(interactor) || Part == null) return false;
-            // Tracked hands: the pistol is grabbed only through the hand's direct interactor (VRHandFistGrab picks it and
-            // holds it in the palm grip pose), so the hand ray only highlights it. A fingertip poke never picks a part up.
+            // Close-range grabbing only: rays operate UI panels, never pick parts from a distance.
+            if (interactor is XRRayInteractor) return false;
+            // Tracked hands: a fingertip poke never picks a part up.
             if (VRHands.Instance != null && VRHands.Instance.IsTrackedHand(interactor, out _)
-                && (interactor is XRPokeInteractor || (interactor is XRRayInteractor && wrapTrackedHand))) return false;
+                && interactor is XRPokeInteractor) return false;
             if (IsSelected(interactor)) return true;                            // keep holding
-            if (isSelected) return selectMode == InteractableSelectMode.Multiple; // second hand only on two-handed parts, never a "steal"
+            if (isSelected) return false;                                       // never attach or steal with a second hand
             return Part.IsGrabbable;                                             // not seated, not flying back to the bench
         }
 
         public override bool IsHoverableBy(IXRHoverInteractor interactor)
         {
-            return base.IsHoverableBy(interactor) && Part != null && (Part.IsGrabbable || isSelected);
+            if (!base.IsHoverableBy(interactor) || Part == null) return false;
+            if (interactor is XRRayInteractor) return false;
+            if (interactor is IXRSelectInteractor sel && IsSelected(sel)) return true;
+            return !isSelected && Part.IsGrabbable;
         }
 
         protected override void OnHoverEntered(HoverEnterEventArgs args)

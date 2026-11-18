@@ -274,12 +274,11 @@ namespace VRArmory
 
         public bool HandMode => handMode;
 
-        // Who may rack the slide: never the hand holding the pistol, never a poke. A tracked hand must close in a fist on
-        // the rear of the slide with its direct interactor (a pinch is for the safety, and the hand ray would let finger
-        // fidgeting grab it). Controllers: the other controller's grip, as before.
+        // Who may rack the slide: never the hand holding the pistol, never a poke or ray. A tracked hand must close in a
+        // fist on the rear of the slide with its direct interactor. Controllers: the other controller's direct grip.
         private bool CanRack(IXRInteractor interactor)
         {
-            if (interactor is XRPokeInteractor || IsPistolHandSide(interactor)) return false;
+            if (interactor is XRPokeInteractor || interactor is XRRayInteractor || IsPistolHandSide(interactor)) return false;
             if (hands != null && hands.IsTrackedHand(interactor, out Handedness side))
                 return interactor is XRDirectInteractor && (rackGrip.isSelected || VRHandFistGrab.IsFist(side));
             return true;

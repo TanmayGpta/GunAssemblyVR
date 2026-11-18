@@ -28331,6 +28331,22 @@ MonoBehaviour:
   thumbRestCurl: {x: 10, y: 10, z: 5}
   thumbDownCurl: {x: 25, y: 30, z: 20}
   fingerSpeed: 20
+  poseSwapTrigger: 0
+  directHoverRadius: 0.055
+  directHoverOffset: {x: 0, y: -0.01, z: 0.025}
+  gunHoverMaxDistance: 0.055
+  hoverSwitchMargin: 0.012
+  partOpenCurl: {x: 18, y: 22, z: 12}
+  partMinCurl: {x: 34, y: 42, z: 22}
+  partMaxCurl: {x: 72, y: 84, z: 48}
+  partPinchRefCurl: {x: 48, y: 58, z: 32}
+  partRingCurl: {x: 78, y: 88, z: 52}
+  partLittleCurl: {x: 82, y: 90, z: 55}
+  partThumbBaseRotation: {x: 10, y: -34, z: 12}
+  partThumbKnuckleRotation: {x: 18, y: 12, z: 0}
+  partThumbTipRotation: {x: 22, y: 6, z: 0}
+  partThumbLength: 0.9
+  partGripOffset: {x: 0, y: 0, z: 0}
   wrapMaxCurl: {x: 90, y: 100, z: 70}
   fingerRadius: 0.009
   pullContactRadius: 0.005
@@ -31979,7 +31995,7 @@ MonoBehaviour:
   m_InteractionLayers:
     m_Bits: 1
   m_DistanceCalculationMode: 1
-  m_SelectMode: 1
+  m_SelectMode: 0
   m_FocusMode: 1
   m_CustomReticle: {fileID: 0}
   m_AllowGazeInteraction: 0
@@ -46523,7 +46539,7 @@ MonoBehaviour:
   m_InteractionLayers:
     m_Bits: 1
   m_DistanceCalculationMode: 1
-  m_SelectMode: 1
+  m_SelectMode: 0
   m_FocusMode: 1
   m_CustomReticle: {fileID: 0}
   m_AllowGazeInteraction: 0
@@ -60352,7 +60368,7 @@ MonoBehaviour:
   m_InteractionLayers:
     m_Bits: 1
   m_DistanceCalculationMode: 1
-  m_SelectMode: 1
+  m_SelectMode: 0
   m_FocusMode: 1
   m_CustomReticle: {fileID: 0}
   m_AllowGazeInteraction: 0
@@ -60963,7 +60979,7 @@ MonoBehaviour:
   m_InteractionLayers:
     m_Bits: 1
   m_DistanceCalculationMode: 1
-  m_SelectMode: 1
+  m_SelectMode: 0
   m_FocusMode: 1
   m_CustomReticle: {fileID: 0}
   m_AllowGazeInteraction: 0
