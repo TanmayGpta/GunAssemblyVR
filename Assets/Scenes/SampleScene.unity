@@ -56765,7 +56765,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8733093507751517968, guid: 5eccbf4be2c00e94689ee8062e4e7276, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.95
+      value: -0.65
       objectReference: {fileID: 0}
     - target: {fileID: 8733093507751517968, guid: 5eccbf4be2c00e94689ee8062e4e7276, type: 3}
       propertyPath: m_LocalRotation.x
@@ -60883,7 +60883,7 @@ Transform:
   m_GameObject: {fileID: 2099845259}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
-  m_LocalPosition: {x: -0.086640045, y: 0.88330805, z: 0.00022052974}
+  m_LocalPosition: {x: -0.086640045, y: 0.87552506, z: 0.00022052974}
   m_LocalScale: {x: 2.190332, y: 2.190332, z: 2.190332}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -60942,8 +60942,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.09445372, y: 0.02227284, z: 0.02017777}
-  m_Center: {x: 0.00010068342, y: 0.00003854651, z: -0.00023786444}
+  m_Size: {x: 0.09445372, y: 0.020544827, z: 0.020544827}
+  m_Center: {x: 0.00010068342, y: 0.0011532158, z: -0.00023786444}
 --- !u!114 &2099845263
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -61548,6 +61548,7 @@ MonoBehaviour:
   warning: {r: 1, g: 0.76, b: 0.32, a: 1}
   error: {r: 1, g: 0.45, b: 0.4, a: 1}
   segmentIdle: {r: 1, g: 1, b: 1, a: 0.12}
+  benchStandZ: -0.65
 --- !u!1 &2109313781
 GameObject:
   m_ObjectHideFlags: 0
@@ -61697,7 +61698,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1.1
-  m_Text: GUNASSEMBLY VR
+  m_Text: VR TACTICAL ARMORY
 --- !u!222 &2110089847
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -62897,7 +62898,7 @@ Transform:
   m_GameObject: {fileID: 649680702913889749}
   serializedVersion: 2
   m_LocalRotation: {x: -0.00000011774573, y: 0.0000000044784096, z: 0.00000043262833, w: 1}
-  m_LocalPosition: {x: 0.037628584, y: 0.0023625987, z: 0.0026475384}
+  m_LocalPosition: {x: 0.037628584, y: 0.0010385964, z: 0.0026475384}
   m_LocalScale: {x: 0.4565517, y: 0.45655167, z: 0.4565519}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -63544,7 +63545,7 @@ Transform:
   m_GameObject: {fileID: 9028886384541861984}
   serializedVersion: 2
   m_LocalRotation: {x: -0.00000016303062, y: 0.0000000023126339, z: 0.00000030368972, w: 1}
-  m_LocalPosition: {x: 0.034403455, y: -0.009592614, z: 0.0009304634}
+  m_LocalPosition: {x: 0.034388423, y: -0.006039267, z: 0.000933185}
   m_LocalScale: {x: 0.4565518, y: 0.45655173, z: 0.45655182}
   m_ConstrainProportionsScale: 0
   m_Children: []

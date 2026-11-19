@@ -73,7 +73,7 @@ namespace VRArmory.Editor
 
             // --- Pieces on the slide ---
             Place(slide, slideBody, SlideMin, "Rear_Sight", new Vector3(52.3f, -14.7f, 73.6f));    // on the slide, not above it
-            Place(slide, slideBody, SlideMin, "Safety_Axle", new Vector3(46.7f, -17.1f, 57.1f));   // through the slide, knob on its side
+            PlaceSafety(slide, slideBody);
 
             // --- Pieces on the barrel: locking block under the barrel, centred on it ---
             Transform barrelMain = barrel.Find("Barrel_Assembly");
@@ -137,6 +137,36 @@ namespace VRArmory.Editor
             Transform old = group.Find("Slide_Front_Top");
             if (old != null) Object.DestroyImmediate(old.gameObject);
             Round(group, module, origin, "Slide_Front_Top", new Vector3(-103.6f, -18.8f, 50.1f), new Vector3(-1.1f, 1.8f, 73.1f));
+        }
+
+        // Seats both sides of the Beretta safety flush against the curved rear slide so neither hovers with a gap.
+        [MenuItem("Tools/VR Armory/Fix Gun Model (safety lever only)")]
+        public static void SafetyFromMenu()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            GameObject station = GameObject.Find("ArmorerStation");
+            Transform slide = station != null ? station.transform.Find("Staged_Gun_Parts/02_Upper_Slide") : null;
+            Transform slideBody = slide != null ? slide.Find("Slide_Body") : null;
+            Transform mat = station != null ? station.transform.Find("Workbench/Armorer_Rubber_Mat") : null;
+            if (slideBody == null || mat == null)
+            {
+                Debug.LogError("[VR Armory] Fix Gun Model: 02_Upper_Slide, Slide_Body or Armorer_Rubber_Mat not found.");
+                return;
+            }
+            PlaceSafety(slide, slideBody);
+            AssemblySetup.FitCollider(slide);
+            float matTop = mat.GetComponent<Renderer>().bounds.max.y;
+            slide.position += Vector3.up * (matTop + 0.001f - AssemblySetup.WorldBounds(slide).min.y);
+            var scene = EditorSceneManager.GetActiveScene();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("[VR Armory] Gun model: safety axle and ambi safety lever seated flush on slide.");
+        }
+
+        static void PlaceSafety(Transform slide, Transform slideBody)
+        {
+            Place(slide, slideBody, SlideMin, "Safety_Axle", new Vector3(46.7f, -20.0f, 57.1f));        // through the slide, left wing flush
+            Place(slide, slideBody, SlideMin, "Ambi_Safety_Lever", new Vector3(46.8f, -25.0f, 55.8f));  // right safety paddle seated into slide/axle
         }
 
         // A round bar lying along the bore, filling the box between two corners (its ends are hidden inside the slide).

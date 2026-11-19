@@ -428,13 +428,31 @@ namespace VRArmory.Tests
             ActionBasedController lc = FindController("Left Controller");
             Check("controllers-tracked", lc != null && Vector3.Distance(lc.transform.position, L.pos) < 0.01f,
                 $"left controller at {lc?.transform.position}, sent {L.pos}");
+            Check("vr-bench-spawn-edge", Mathf.Abs(cam.transform.position.x) < 0.02f && Mathf.Abs(cam.transform.position.z - menu.benchStandZ) < 0.02f,
+                $"cam pos={cam.transform.position} expected Z={menu.benchStandZ:0.00}");
 
             // ---- v1.1: module selection -> coming soon -> back -> gun assembly -> briefing -> start
             yield return PressButton(R, menu.shootingModuleButton);
             Check("v11-shooting-shows-coming-soon", menu.comingSoonPanel.activeSelf && !mgr.HasStarted);
             yield return PressButton(R, menu.comingSoonBackButton);
             Check("v11-coming-soon-back", menu.modulesPanel.activeSelf && !menu.comingSoonPanel.activeSelf);
+
+            // Simulate walking back/sideways and turning away IRL, then clicking Gun Assembly: must snap back facing +Z at bench edge.
+            origin.transform.position += new Vector3(0.35f, 0f, -0.45f);
+            origin.transform.Rotate(0f, 110f, 0f);
+            SendHead();
+            yield return Frames(2);
+
             yield return PressButton(R, menu.assemblyModuleButton);
+            SendHead();
+            yield return Frames(2);
+            Vector3 benchFwd = Vector3.ProjectOnPlane(cam.transform.forward, Vector3.up).normalized;
+            Check("vr-recenter-on-assembly-click",
+                Mathf.Abs(cam.transform.position.x) < 0.02f
+                && Mathf.Abs(cam.transform.position.z - menu.benchStandZ) < 0.02f
+                && Vector3.Dot(benchFwd, Vector3.forward) > 0.99f,
+                $"cam pos={cam.transform.position} fwd={benchFwd}");
+
             yield return PressButton(R, menu.weaponCards[0]); // weapon cards come between the modules and the briefing
             Check("v11-assembly-module-opens-briefing", menu.introPanel.activeSelf && !mgr.HasStarted);
             yield return WaitFor(() => Said(VoiceLine.Intro_Briefing) > 0, 2f);

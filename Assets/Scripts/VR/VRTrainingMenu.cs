@@ -1,3 +1,5 @@
+using System.Collections;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -76,6 +78,10 @@ namespace VRArmory
         public Color error = new Color(1.0f, 0.45f, 0.4f);
         public Color segmentIdle = new Color(1f, 1f, 1f, 0.12f);
 
+        [Header("Bench spawn")]
+        [Tooltip("World Z coordinate where the VR camera stands in front of the workbench (front edge is -0.45 m).")]
+        public float benchStandZ = -0.65f;
+
         public enum Feedback { None, Info, Guide, Success, Error }
 
         public Feedback ShownFeedback { get; private set; }
@@ -100,6 +106,7 @@ namespace VRArmory
 
         private AudioSource audioSource;
         private AudioClip clickClip, stepClip, bigClip;
+        private XROrigin cachedOrigin;
 
         void Awake()
         {
@@ -221,6 +228,7 @@ namespace VRArmory
 
         private void OnAssemblyModule()
         {
+            RecenterToBench();
             if (manager.HasStarted && !manager.IsComplete) Show(progressPanel); // continue where the trainee left off
             else if (weaponPanel != null) Show(weaponPanel);                    // choose (or choose again) what to build
             else if (manager.IsComplete) Restart();
@@ -238,12 +246,14 @@ namespace VRArmory
             bool onBench = kits == null || kits.Active == kit;
             if (onBench && !manager.HasStarted)
             {
+                RecenterToBench();
                 if (kit != null && !kit.gameObject.activeSelf) kit.gameObject.SetActive(true);
                 Show(introPanel);
                 return;
             }
             if (onBench && !manager.IsComplete)
             {
+                RecenterToBench();
                 if (kit != null && !kit.gameObject.activeSelf) kit.gameObject.SetActive(true);
                 Show(progressPanel);
                 return;
@@ -277,6 +287,7 @@ namespace VRArmory
 
         private void OnStartPressed()
         {
+            RecenterToBench();
             Show(progressPanel);
             manager.BeginTraining();
         }
@@ -285,6 +296,66 @@ namespace VRArmory
         void Start()
         {
             RelabelShootingModule();
+            RecenterToBench();
+            if (VRPlatformSwitch.IsVR) StartCoroutine(RecenterOnFirstTrackedPose());
+        }
+
+        private XROrigin BenchOrigin()
+        {
+            if (cachedOrigin == null) cachedOrigin = FindObjectOfType<XROrigin>();
+            return cachedOrigin;
+        }
+
+        // Moves and rotates the XR Origin so the live headset camera stands centered at the workbench edge facing +Z,
+        // regardless of where the player stood or faced in the real room.
+        public void RecenterToBench()
+        {
+            if (!VRPlatformSwitch.IsVR) return;
+            XROrigin origin = BenchOrigin();
+            if (origin == null || origin.Camera == null) return;
+
+            CharacterController cc = origin.GetComponent<CharacterController>();
+            bool ccOn = cc != null && cc.enabled;
+            if (cc != null) cc.enabled = false;
+
+            Vector3 flatForward = Vector3.ProjectOnPlane(origin.Camera.transform.forward, Vector3.up);
+            if (flatForward.sqrMagnitude >= 1e-4f)
+            {
+                origin.MatchOriginUpCameraForward(Vector3.up, Vector3.forward);
+            }
+            else
+            {
+                Vector3 flatUp = Vector3.ProjectOnPlane(origin.Camera.transform.up, Vector3.up);
+                if (flatUp.sqrMagnitude >= 1e-4f)
+                    origin.RotateAroundCameraPosition(Vector3.up, Vector3.SignedAngle(flatUp, Vector3.forward, Vector3.up));
+            }
+
+            Vector3 cam = origin.Camera.transform.position;
+            origin.MoveCameraToWorldLocation(new Vector3(0f, cam.y, benchStandZ));
+            if (cc != null) cc.enabled = ccOn;
+            Physics.SyncTransforms();
+        }
+
+        private IEnumerator RecenterOnFirstTrackedPose()
+        {
+            // OpenXR / TrackedPoseDriver often delivers the room-scale HMD pose a frame after scene load;
+            // wait briefly for that first non-zero tracked pose and snap once onto the bench edge.
+            for (float t = 0f; t < 0.5f; t += Time.unscaledDeltaTime)
+            {
+                XROrigin origin = BenchOrigin();
+                if (origin != null && origin.Camera != null)
+                {
+                    Transform camT = origin.Camera.transform;
+                    if (camT.localPosition.sqrMagnitude > 0.0001f || Quaternion.Angle(Quaternion.identity, camT.localRotation) > 0.5f)
+                    {
+                        yield return null;
+                        RecenterToBench();
+                        yield break;
+                    }
+                }
+                yield return null;
+            }
+            RecenterToBench();
         }
 
         // Module 02: straight into the fire training booth when the pistol is assembled and checked; otherwise its panel
@@ -338,6 +409,7 @@ namespace VRArmory
 
         private void OnChangeWeapon()
         {
+            RecenterToBench();
             WeaponKit activeKit = WeaponKitSwitch.Instance != null ? WeaponKitSwitch.Instance.Active : null;
             bool wasHolding = AssemblyPart.HeldParts.Count > 0;
             if (!wasHolding && activeKit != null)

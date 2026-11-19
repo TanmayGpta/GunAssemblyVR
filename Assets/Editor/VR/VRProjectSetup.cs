@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
+using UnityEditor.Android;
+using UnityEditor.Build;
 using UnityEditor.XR.Management;
 using UnityEditor.XR.Management.Metadata;
 using UnityEditor.XR.OpenXR;
@@ -28,6 +30,8 @@ namespace VRArmory.Editor
         // Build order: the Intro (soldier briefing) first, when it has been created, then the training scene.
         public static string[] BuildScenes => System.IO.File.Exists(IntroScenePath) ? new[] { IntroScenePath, ScenePath } : new[] { ScenePath };
         public const string AndroidPackageId = "com.vrarmory.gunassemblyvr";
+        public const string AppProductName = "VR Tactical Armory";
+        public const string AppIconPath = "Assets/Textures/GunLogo2.png";
         const string XRSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
         const string LayerSettingsPath = "Assets/XRI/Settings/Resources/InteractionLayerSettings.asset";
         const string LayerSettingsScriptGuid = "191492db6e452eb468b95433ec162164"; // XRI's InteractionLayerSettings script
@@ -37,6 +41,7 @@ namespace VRArmory.Editor
         {
             ConfigureBuildSettings();
             ConfigureAndroidPlayer();
+            ConfigureBranding();
             ConfigureXRManagement();
             ConfigureOpenXR();
             ConfigureQuestQuality();
@@ -67,6 +72,50 @@ namespace VRArmory.Editor
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft; // the only orientation Quest supports
             PlayerSettings.SetMobileMTRendering(BuildTargetGroup.Android, true);
             EditorUserBuildSettings.androidBuildSubtarget = MobileTextureSubtarget.ASTC;
+        }
+
+        // App name, Default/Android launcher icons, and VR Splash Screen using Assets/Textures/GunLogo2.png.
+        static void ConfigureBranding()
+        {
+            PlayerSettings.productName = AppProductName;
+
+            if (!File.Exists(AppIconPath))
+            {
+                Debug.LogWarning($"[VR Armory] App icon '{AppIconPath}' not found; skipping icon/splash assignment.");
+                return;
+            }
+
+            if (AssetImporter.GetAtPath(AppIconPath) is TextureImporter importer &&
+                (importer.textureType != TextureImporterType.Sprite || importer.spriteImportMode != SpriteImportMode.Single))
+            {
+                importer.textureType = TextureImporterType.Sprite;
+                importer.spriteImportMode = SpriteImportMode.Single;
+                importer.mipmapEnabled = false;
+                importer.SaveAndReimport();
+            }
+
+            Texture2D iconTex = AssetDatabase.LoadAssetAtPath<Texture2D>(AppIconPath);
+            Sprite logoSprite = AssetDatabase.LoadAssetAtPath<Sprite>(AppIconPath);
+            if (iconTex == null) return;
+
+            PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { iconTex }, IconKind.Any);
+            SetAndroidIcons(AndroidPlatformIconKind.Adaptive, iconTex, iconTex);
+            SetAndroidIcons(AndroidPlatformIconKind.Round, iconTex);
+            SetAndroidIcons(AndroidPlatformIconKind.Legacy, iconTex);
+
+            PlayerSettings.virtualRealitySplashScreen = iconTex;
+            PlayerSettings.SplashScreen.show = true;
+            PlayerSettings.SplashScreen.backgroundColor = new Color32(18, 27, 35, 255);
+            PlayerSettings.SplashScreen.drawMode = PlayerSettings.SplashScreen.DrawMode.UnityLogoBelow;
+            if (logoSprite != null)
+                PlayerSettings.SplashScreen.logos = new[] { PlayerSettings.SplashScreenLogo.Create(2f, logoSprite) };
+        }
+
+        static void SetAndroidIcons(PlatformIconKind kind, params Texture2D[] layers)
+        {
+            PlatformIcon[] slots = PlayerSettings.GetPlatformIcons(NamedBuildTarget.Android, kind);
+            foreach (PlatformIcon slot in slots) slot.SetTextures(layers);
+            PlayerSettings.SetPlatformIcons(NamedBuildTarget.Android, kind, slots);
         }
 
         static void ConfigureXRManagement()

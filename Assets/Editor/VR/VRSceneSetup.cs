@@ -34,8 +34,8 @@ namespace VRArmory.Editor
         const float WalkSpeed = 1.6f;  // m/s, normal walking pace
         const float TurnSpeed = 75f;   // deg/s
 
-        // Where the desktop player stands: in front of the bench, facing downrange (+Z).
-        static readonly Vector3 BenchStandPoint = new Vector3(0f, 0f, -0.95f);
+        // Where the VR player stands: adjacent to the front edge of the workbench (edge is at Z = -0.45 m), facing +Z.
+        static readonly Vector3 BenchStandPoint = new Vector3(0f, 0f, -0.65f);
 
         // Training panel colours (one palette: teal = "this is what to use", green = done, amber = adjust, red = wrong).
         internal static readonly Color PanelColor = new Color(0.05f, 0.065f, 0.085f, 0.97f);

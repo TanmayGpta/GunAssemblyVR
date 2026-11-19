@@ -263,10 +263,10 @@ namespace VRArmory.Editor
             title.transform.SetParent(stage, false);
             title.transform.SetPositionAndRotation(new Vector3(0f, 3.0f, RoomFront - 0.07f), Quaternion.identity);
             title.transform.localScale = Vector3.one * 0.01f; // 1 canvas unit = 1 cm
-            ((RectTransform)title.transform).sizeDelta = new Vector2(800f, 160f);
+            ((RectTransform)title.transform).sizeDelta = new Vector2(880f, 160f);
             title.AddComponent<Canvas>().renderMode = RenderMode.WorldSpace;
             title.AddComponent<CanvasScaler>().dynamicPixelsPerUnit = 4f;
-            Label(title.transform, "Brand", VRTrainingText.Brand, 90, new Color(TextPrimary.r, TextPrimary.g, TextPrimary.b, 0.9f), new Vector2(0f, 25f), new Vector2(800f, 110f), TextAnchor.MiddleCenter, FontStyle.Bold);
+            Label(title.transform, "Brand", VRTrainingText.Brand, 76, new Color(TextPrimary.r, TextPrimary.g, TextPrimary.b, 0.9f), new Vector2(0f, 25f), new Vector2(880f, 110f), TextAnchor.MiddleCenter, FontStyle.Bold);
             Label(title.transform, "Tagline", "WEAPON HANDLING TRAINING", 28, Accent, new Vector2(0f, -50f), new Vector2(800f, 40f), TextAnchor.MiddleCenter, FontStyle.Bold);
         }
 

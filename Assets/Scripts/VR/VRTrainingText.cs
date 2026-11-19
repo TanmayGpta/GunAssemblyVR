@@ -5,7 +5,7 @@ namespace VRArmory
     public static class VRTrainingText
     {
         // ---------- Modules ----------
-        public const string Brand = "GUNASSEMBLY VR";
+        public const string Brand = "VR TACTICAL ARMORY";
         public const string ModulesTitle = "Choose your training";
         public const string ModulesFooter = "Point at a card and pull the trigger";
 
